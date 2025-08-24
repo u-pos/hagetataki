@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Whack-a-CC — 1分ランキング</title>
+  <style>
+    :root { --cols:3; --rows:3; --hole:26vw; --gap:3vw; --radius:2.2vw; }
+    html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif; }
+    .wrap { height:100%; display:flex; flex-direction:column; align-items:center; }
+
+    .header { width:100%; max-width:720px; display:flex; gap:1rem; align-items:center; justify-content:space-between; padding:10px 12px; box-sizing:border-box; }
+    .brand { font-weight:800; letter-spacing:0.5px; font-size:18px; opacity:.9; }
+    .stats { display:flex; gap:12px; align-items:center; }
+    .badge { background:#1b1b1f; border:1px solid #2a2a33; padding:6px 10px; border-radius:999px; font-size:14px; min-width:66px; text-align:center; }
+    .score { font-weight:800; }
+    .time { font-variant-numeric:tabular-nums; font-weight:700; }
+    .combo { background:#26223a; border:1px solid #3b2f6d; }
+
+    .controls { display:flex; gap:8px; flex-wrap:wrap; }
+    button { appearance:none; border:none; border-radius:12px; padding:10px 12px; background:#2b2b33; color:#fff; font-weight:700; letter-spacing:.3px; box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 10px 20px rgba(0,0,0,.2); cursor:pointer; }
+    button:hover { filter:brightness(1.05); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+
+    .main { flex:1; width:100%; display:flex; flex-direction:column; align-items:center; gap:10px; }
+
+    .board { position:relative; width:calc(var(--cols) * var(--hole) + (var(--cols) - 1) * var(--gap)); height:calc(var(--rows) * var(--hole) + (var(--rows) - 1) * var(--gap)); display:grid; grid-template-columns: repeat(var(--cols), var(--hole)); grid-template-rows: repeat(var(--rows), var(--hole)); gap:var(--gap); touch-action:none; user-select:none; -webkit-user-drag:none; }
+    .hole { position:relative; background: radial-gradient(ellipse at center, #15151a 0%, #0f0f12 70%, #07070a 100%); border-radius: calc(var(--radius) + 4px); box-shadow:inset 0 8px 22px rgba(0,0,0,.55), inset 0 -10px 20px rgba(255,255,255,.05); overflow:hidden; }
+    .target { position:absolute; inset:auto 0 0 0; margin:auto; width:88%; aspect-ratio:1 / 1; transform: translateY(110%); transition: transform .18s cubic-bezier(.2,.7,.2,1), filter .1s ease; will-change: transform, filter; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.55); pointer-events:auto; }
+    .target.up { transform: translateY(0%); }
+    .target.hit { filter:brightness(.8) grayscale(.2); }
+    .label { position:absolute; bottom:6px; left:6px; font-weight:800; font-size:12px; background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.15); padding:2px 6px; border-radius:8px; }
+
+    .float { position:absolute; left:50%; top:30%; transform:translateX(-50%); font-weight:900; font-size:20px; text-shadow:0 2px 6px rgba(0,0,0,.6); opacity:0; pointer-events:none; }
+
+    .footer { width:100%; max-width:720px; display:flex; justify-content:space-between; align-items:center; padding:8px 12px 12px; box-sizing:border-box; gap:8px; }
+
+    .leader { width:100%; max-width:720px; padding:10px 12px 18px; box-sizing:border-box; }
+    details { background:#111117; border:1px solid #23232b; border-radius:12px; }
+    summary { cursor:pointer; padding:12px 14px; font-weight:800; letter-spacing:.3px; }
+    .lb-wrap { padding:0 14px 14px; }
+    .lb-table { width:100%; border-collapse:separate; border-spacing:0 8px; }
+    .lb-table th { text-align:left; font-size:12px; opacity:.6; font-weight:700; }
+    .lb-table td { background:#17171e; border:1px solid #2a2a31; padding:10px 12px; border-radius:10px; font-variant-numeric: tabular-nums; }
+    .lb-rank { width:56px; text-align:center; font-weight:800; }
+    .lb-name { max-width:38vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .lb-score { text-align:right; font-weight:900; }
+
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:12px; z-index:1000; }
+    .modal { width:min(520px, 94vw); background:#121219; border:1px solid #2a2a33; border-radius:16px; padding:18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+    .modal h2 { margin:0 0 10px; font-size:20px; }
+    .modal p { margin:6px 0; opacity:.9; }
+    .modal .row { display:flex; gap:8px; margin-top:12px; }
+    .modal input { flex:1; background:#1b1b22; border:1px solid #2b2b33; border-radius:10px; color:#fff; padding:10px 12px; font-size:16px; }
+
+    .celebrate { position:fixed; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; z-index:1100; }
+    .celebrate .msg { background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding:14px 18px; border-radius:16px; font-size:20px; font-weight:900; box-shadow:0 10px 40px rgba(0,0,0,.5); }
+    .confetti { position:absolute; top:-10vh; width:8px; height:14px; border-radius:2px; opacity:.95; animation: fall linear forwards; }
+    @keyframes fall { to { transform: translateY(115vh) rotate(720deg); opacity:.95; } }
+
+    @media (min-width: 721px) {
+      :root { --hole:160px; --gap:14px; --radius:14px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="header">
+    <div class="brand">Whack-a-CC / 1MIN</div>
+    <div class="stats">
+      <div class="badge">Score <span id="score" class="score">0</span></div>
+      <div class="badge">Time <span id="time" class="time">60</span>s</div>
+      <div class="badge combo">Combo <span id="combo">0</span></div>
+    </div>
+    <div class="controls">
+      <button id="startBtn">スタート</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="board" id="board" aria-label="モグラたたき盤">
+      <!-- 3x3 ホール -->
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div style="opacity:.75; font-size:14px;">CC.jpg で加点（コンボで増加）。NN.jpg は -50 点＆コンボリセット。</div>
+    <div class="controls">
+      <button id="showLB">ランキング</button>
+      <button id="resetLB" title="ローカルのランキングを初期化">LBリセット</button>
+    </div>
+  </footer>
+
+  <section class="leader">
+    <details id="lbDetails">
+      <summary>TOP15 ランキング</summary>
+      <div class="lb-wrap">
+        <table class="lb-table" id="lbTable">
+          <thead><tr><th>#</th><th>名前</th><th>スコア</th><th>日時</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+
+<!-- 登録モーダル -->
+<div class="overlay" id="entryOverlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2>スコア登録</h2>
+    <p>おめでとう！TOP15にランクイン圏内やで。名前を入れて登録しよか？</p>
+    <div class="row">
+      <input id="nameInput" type="text" maxlength="16" placeholder="名前（未入力なら『名無しさん』）" />
+      <button id="saveScore">登録</button>
+      <button id="skipScore">スキップ</button>
+    </div>
+  </div>
+</div>
+
+<!-- お祝い -->
+<div class="celebrate" id="celebrate">
+  <div class="msg">🎉 ランクイン！おめでとう！</div>
+</div>
+<audio id="congAudio" src="cong.mp3" preload="auto"></audio>
+
+<script>
+(function(){
+  const COLS = 3, ROWS = 3;
+  const boardEl = document.getElementById('board');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const comboEl = document.getElementById('combo');
+  const startBtn = document.getElementById('startBtn');
+  const showLB = document.getElementById('showLB');
+  const resetLB = document.getElementById('resetLB');
+  const lbTable = document.getElementById('lbTable').querySelector('tbody');
+  const lbDetails = document.getElementById('lbDetails');
+  const entryOverlay = document.getElementById('entryOverlay');
+  const nameInput = document.getElementById('nameInput');
+  const saveScoreBtn = document.getElementById('saveScore');
+  const skipScoreBtn = document.getElementById('skipScore');
+  const celebrate = document.getElementById('celebrate');
+  const congAudio = document.getElementById('congAudio');
+
+  const KEY_LB = 'wam_leaderboard_v1';
+  const KEY_NAME = 'wam_last_name';
+
+  const IMG_CC = 'CC.jpg'; // 叩くと+（コンボ加点）
+  const IMG_NN = 'NN.jpg'; // 叩くと-50 & コンボ終了
+
+  let score=0, combo=0, timeLeft=60, timerId=null, running=false;
+  let spawnTimer=null, speed=900, interval=700; // 表示時間, スポーン間隔(ms)
+
+  // 盤面生成
+  function buildBoard(){
+    boardEl.innerHTML='';
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const hole=document.createElement('div');
+        hole.className='hole';
+        const img=document.createElement('img');
+        img.className='target';
+        img.alt='target';
+        img.draggable=false;
+        img.decoding='async';
+        img.addEventListener('pointerdown', onHit, {passive:true});
+        hole.appendChild(img);
+        const fl=document.createElement('div'); fl.className='float'; hole.appendChild(fl);
+        boardEl.appendChild(hole);
+      }
+    }
+  }
+
+  function setScore(v){ score=v; scoreEl.textContent=v; }
+  function setCombo(v){ combo=v; comboEl.textContent=v; }
+
+  function start(){
+    if(running) return;
+    running=true;
+    setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
+    startBtn.disabled=true;
+    // 事前プリロード（ユーザー操作開始後）
+    preload([IMG_CC, IMG_NN]);
+    // ループ開始
+    runTimer();
+    startSpawning();
+  }
+
+  function runTimer(){
+    clearInterval(timerId);
+    timerId = setInterval(()=>{
+      timeLeft--; timeEl.textContent=timeLeft;
+      if(timeLeft<=0){ clearInterval(timerId); timeLeft=0; timeEl.textContent=0; endGame(); }
+    }, 1000);
+  }
+
+  function startSpawning(){
+    clearInterval(spawnTimer);
+    spawnTimer = setInterval(()=>{
+      // ランダムなホールに出現（同時に複数もあり得るが少なめ）
+      const holes = [...document.querySelectorAll('.hole')];
+      const count = Math.random()<0.2 ? 2 : 1; // たまに2体
+      for(let k=0;k<count;k++){
+        const hole = holes[Math.floor(Math.random()*holes.length)];
+        const img = hole.querySelector('.target');
+        if(img.classList.contains('up')) continue; // 既に出てたらスキップ
+        const isNN = Math.random() < 0.2; // 20%でNN
+        img.src = isNN ? IMG_NN : IMG_CC;
+        img.dataset.kind = isNN ? 'nn' : 'cc';
+        img.classList.add('up');
+        img.classList.remove('hit');
+        img.style.pointerEvents='auto';
+        // 一定時間で下げる
+        const showFor = Math.max(420, speed + (Math.random()*200-100));
+        setTimeout(()=>{
+          img.classList.remove('up');
+          img.style.pointerEvents='none';
+        }, showFor);
+      }
+      // 緩やかに加速
+      if(interval>420) interval-=6;
+      if(speed>520) speed-=4;
+      clearInterval(spawnTimer); spawnTimer=setInterval(arguments.callee, interval); // update cadence
+    }, interval);
+  }
+
+  function onHit(e){
+    if(!running) return;
+    const img = e.currentTarget;
+    if(!img.classList.contains('up')) return; // 地中
+    if(img.classList.contains('hit')) return; // 連打防止
+
+    img.classList.add('hit');
+    img.style.pointerEvents='none';
+
+    const hole = img.parentElement;
+    const fl = hole.querySelector('.float');
+
+    if(img.dataset.kind==='cc'){
+      setCombo(combo+1);
+      setScore(score + combo); // 例: 1,2,3… と増分
+      floatText(fl, `+${combo}`);
+    } else { // nn
+      setCombo(0);
+      setScore(score - 50);
+      floatText(fl, `-50`);
+    }
+  }
+
+  function floatText(el, text){
+    el.textContent=text;
+    el.style.transition='none';
+    el.style.opacity='0';
+    el.style.transform='translate(-50%, 10px)';
+    requestAnimationFrame(()=>{
+      el.style.transition='transform .22s ease, opacity .22s ease';
+      el.style.opacity='1';
+      el.style.transform='translate(-50%, -18px)';
+      setTimeout(()=>{ el.style.opacity='0'; }, 220);
+    });
+  }
+
+  function endGame(){
+    running=false; startBtn.disabled=false; clearInterval(spawnTimer);
+    document.querySelectorAll('.target').forEach(t=>{ t.classList.remove('up'); t.style.pointerEvents='none'; });
+    // ランキング判定
+    const lb = getLB();
+    const qualifies = lb.length<15 || score > (lb[lb.length-1]?.score ?? -1);
+    if(score!==0 && qualifies){
+      nameInput.value = localStorage.getItem(KEY_NAME) || '';
+      entryOverlay.style.display='flex';
+    }
+  }
+
+  // ランキング周り
+  function getLB(){
+    try{ return JSON.parse(localStorage.getItem(KEY_LB)||'[]'); }catch(e){ return []; }
+  }
+  function saveLB(list){ localStorage.setItem(KEY_LB, JSON.stringify(list)); }
+  function insertScore(name,score){
+    const now = new Date();
+    const entry = { name: (name||'').trim() || '名無しさん', score, ts: now.toISOString() };
+    const lb = getLB(); lb.push(entry); lb.sort((a,b)=> b.score - a.score); const cut = lb.slice(0,15); saveLB(cut); return cut.findIndex(x=>x===entry);
+  }
+  function renderLB(){
+    const lb = getLB(); lbTable.innerHTML='';
+    lb.forEach((r,idx)=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td class="lb-rank">${idx+1}</td>
+        <td class="lb-name">${esc(r.name)}</td>
+        <td class="lb-score">${r.score.toLocaleString()}</td>
+        <td style="opacity:.7; font-size:12px;">${fmtDate(r.ts)}</td>`;
+      lbTable.appendChild(tr);
+    });
+  }
+  function fmtDate(iso){ try{ const d=new Date(iso); return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}` }catch(e){ return ''; } }
+  function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
+                                 ">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+  saveScoreBtn.addEventListener('click', ()=> finalizeEntry());
+  skipScoreBtn.addEventListener('click', ()=>{ entryOverlay.style.display='none'; renderLB(); });
+
+  function finalizeEntry(){
+    const name = nameInput.value.trim();
+    localStorage.setItem(KEY_NAME, name);
+    entryOverlay.style.display='none';
+    const rank = insertScore(name, score);
+    renderLB();
+    celebrateRank(rank);
+  }
+
+  function celebrateRank(rank){
+    try{ congAudio.currentTime=0; congAudio.play().catch(()=>{}); }catch(e){}
+    celebrate.style.display='flex';
+    spawnConfetti();
+    setTimeout(()=>{ celebrate.style.display='none'; celebrate.innerHTML='<div class="msg">🎉 ランクイン！おめでとう！</div>'; }, 2200);
+  }
+  function spawnConfetti(){
+    const colors=['#ff5f6d','#f9cb28','#36d1dc','#5b86e5','#a8ff78','#78ffd6','#c471f5','#fa71cd','#f6d365','#fda085','#f093fb','#f5576c'];
+    const N=60;
+    for(let i=0;i<N;i++){
+      const d=document.createElement('div'); d.className='confetti';
+      d.style.left = Math.random()*100 + 'vw';
+      d.style.background = colors[Math.floor(Math.random()*colors.length)];
+      d.style.animationDuration = (1.2 + Math.random()*1.2)+'s';
+      d.style.transform = `translateY(0) rotate(${Math.random()*360}deg)`;
+      celebrate.appendChild(d);
+    }
+    setTimeout(()=>{ document.querySelectorAll('.confetti').forEach(x=>x.remove()); }, 2400);
+  }
+
+  // UI
+  showLB.addEventListener('click', ()=>{ lbDetails.open = !lbDetails.open; });
+  resetLB.addEventListener('click', ()=>{ if(confirm('ローカルのランキングを削除します。よろしいですか？')){ localStorage.setItem(KEY_LB, '[]'); renderLB(); }});
+  startBtn.addEventListener('click', start);
+
+  function preload(srcs){ srcs.forEach(s=>{ const i=new Image(); i.src=s; }); }
+
+  // 初期化
+  buildBoard(); renderLB();
+
+})();
+</script>
+</body>
+</html>
