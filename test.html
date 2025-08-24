@@ -31,7 +31,7 @@
 
     .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:1000; padding:12px; }
     .modal { background:#121219; border:1px solid #2a2a33; border-radius:16px; padding:18px; max-width:560px; width:94vw; }
-    .celebrate { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:1100; }
+    .celebrate { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:1100; pointer-events:none; }
 
     @media (min-width: 721px) {
       :root { --hole:120px; --gap:12px; --radius:14px; }
@@ -100,7 +100,7 @@
 <div class="celebrate" id="celebrate"><div class="msg" style="background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.15); backdrop-filter: blur(8px); padding:14px 18px; border-radius:16px; font-size:20px; font-weight:900; box-shadow:0 10px 40px rgba(0,0,0,.5);">🎉 ランクイン！おめでとう！</div></div>
 
 <script>
-(function(){
+document.addEventListener('DOMContentLoaded', () => {
   // ===== 端末のスワイプ/ズームを抑止 =====
   const stop = (e)=>{ e.preventDefault(); };
   document.addEventListener('touchmove', stop, {passive:false});
@@ -274,14 +274,25 @@
 
   // ===== イベント =====
   saveScoreBtn.addEventListener('click', finalizeEntry);
-  skipScoreBtn.addEventListener('click', async ()=>{ entryOverlay.style.display='none'; await renderLB(); lbOverlay.style.display='flex'; });
-  lbBtn.addEventListener('click', async ()=>{ await renderLB(); lbOverlay.style.display='flex'; });
+  skipScoreBtn.addEventListener('click', ()=>{ entryOverlay.style.display='none'; lbOverlay.style.display='flex'; renderLB(); });
+  lbBtn.addEventListener('click', ()=>{ lbOverlay.style.display='flex'; renderLB(); });
   closeLB.addEventListener('click', ()=> lbOverlay.style.display='none');
   startBtn.addEventListener('click', toggleStartPause);
 
   // ===== 初期化 =====
+  // エラー可視化（念のため）
+  function logErr(msg){
+    try{
+      let box=document.getElementById('errBox');
+      if(!box){ box=document.createElement('div'); box.id='errBox'; box.style.cssText='position:fixed;left:8px;bottom:8px;max-width:90vw;background:rgba(0,0,0,.7);color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;z-index:9999;'; document.body.appendChild(box);} 
+      const p=document.createElement('div'); p.textContent=msg; box.appendChild(p); setTimeout(()=>{ p.remove(); if(!box.childElementCount) box.remove(); },8000);
+    }catch(e){}
+  }
+  window.addEventListener('error', e=> logErr('JSエラー: '+e.message));
+  window.addEventListener('unhandledrejection', e=> logErr('通信/Promiseエラー: '+(e.reason?.message||e.reason||'')));
+
   buildBoard(); updateStartButton();
-})();
+});
 </script>
 </body>
 </html>
