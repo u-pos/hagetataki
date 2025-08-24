@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>1分ランキング（サウンド付き・4x4・API対応）</title>
+  <title>モグラ叩き 1分ランキング（API対応・安全設計）</title>
   <style>
     :root { --cols:4; --rows:4; --hole:21vw; --gap:2.5vw; --radius:2vw; }
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
@@ -13,11 +13,10 @@
     .stats { display:flex; gap:2vw; align-items:center; }
     .badge { background:#1b1b1f; border:1px solid #2a2a33; padding:.9vw 1.6vw; border-radius:999px; font-size:3.6vw; min-width:16vw; text-align:center; }
 
-    /* ボタン */
     .controls { display:flex; gap:2vw; align-items:center; }
     button { border:none; border-radius:3vw; padding:1.2vw 2.2vw; background:#2b2b33; color:#fff; font-weight:700; font-size:3.6vw; }
     button:active { transform:translateY(1px); }
-    #startBtn { background:#2563eb; /* 青 */ color:#fff; padding:1.4vw 3.2vw; min-width:28vw; }
+    #startBtn { background:#2563eb; color:#fff; padding:1.4vw 3.2vw; min-width:28vw; }
     #lbBtn { background:#1b1b1f; border:1px solid #2a2a33; border-radius:999px; padding:.9vw 1.8vw; font-size:3.6vw; }
 
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
@@ -110,8 +109,8 @@
 
   // ===== 定数 =====
   const COLS=4, ROWS=4;
-  const API_BASE = "https://junkhin.com/api/";   // ← 前作と同じディレクトリ
-  const GAME_ID  = "whack";   // ← このゲームを識別
+  const API_BASE = "https://junkhin.com/api";   // 既存APIを使用（scoresは変更しない）
+  const GAME_ID  = "whack";                      // このゲームの識別子
 
   const boardEl=document.getElementById('board');
   const scoreEl=document.getElementById('score');
@@ -137,36 +136,30 @@
   const IMG_NN='NN.png';
 
   let score=0, combo=0, timeLeft=60;
-  let timerId=null, spawnTimer=null;
+  let timerId=null, spawnTimeout=null; // setTimeout 再帰で安定スポーン
   let running=false, paused=false;
 
-  // 速度（少しだけ遅く）
-  let speed=1050, interval=900; // 表示時間ms / スポーン間隔ms
+  // テンポ：少し遅めスタート→じわっと加速
+  let speed=1050, interval=900; // 表示時間ms / 出現間隔ms
   const minSpeed=600, minInterval=520; // 加速の下限
 
   // ===== API =====
   async function fetchLB(){
-    const res = await fetch(`${API_BASE}/getscores.php?game=${encodeURIComponent(GAME_ID)}&limit=15`, { cache: 'no-store' });
-    if(!res.ok) throw new Error('getscores failed');
+    const url = `${API_BASE}/getscores.php?game=${encodeURIComponent(GAME_ID)}&limit=15`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if(!res.ok){ const txt = await res.text(); throw new Error(`getscores ${res.status}: ${txt.slice(0,200)}`); }
     const data = await res.json();
-    return (Array.isArray(data)?data:[]).map(r=>({
-      name: r.name ?? '名無しさん',
-      score: Number(r.score) || 0,
-      ts: r.ts ?? ''
-    }));
+    return (Array.isArray(data)?data:[]).map(r=>({ name:r.name??'名無しさん', score:Number(r.score)||0, ts:r.ts??'' }));
   }
   async function submitScore(name,score){
+    const url = `${API_BASE}/postscores.php`;
     const body = new URLSearchParams({ game: GAME_ID, name, score: String(score) });
-    const res = await fetch(`${API_BASE}/postscores.php`, {
-      method:'POST',
-      headers:{ 'Content-Type': 'application/x-www-form-urlencoded' },
-      body
-    });
-    if(!res.ok) throw new Error('postscores failed');
+    const res = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body });
+    if(!res.ok){ const txt = await res.text(); throw new Error(`postscores ${res.status}: ${txt.slice(0,200)}`); }
     return await res.json();
   }
 
-  // ===== 盤面生成 =====
+  // ===== 盤面 =====
   function buildBoard(){
     boardEl.innerHTML='';
     for(let i=0;i<COLS*ROWS;i++){
@@ -182,43 +175,37 @@
   function setScore(v){ score=v; scoreEl.textContent=v; }
   function setCombo(v){ combo=v; }
 
-  function updateStartButton(){
-    if(!running){ startBtn.textContent='スタート'; return; }
-    startBtn.textContent = paused ? '再開' : '一時停止';
-  }
+  function updateStartButton(){ if(!running){ startBtn.textContent='スタート'; return; } startBtn.textContent = paused ? '再開' : '一時停止'; }
 
   function startGame(){
     running=true; paused=false; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
     [smashAudio,noAudio,bgmAudio,congAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
     try{ bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); }catch(e){}
-    runTimer(); startSpawning(); updateStartButton();
+    runTimer(); scheduleNextSpawn(interval); updateStartButton();
   }
 
   function toggleStartPause(){ if(!running){ startGame(); } else if(!paused){ pauseGame(); } else { resumeGame(); } }
 
-  function pauseGame(){ if(!running||paused) return; paused=true; updateStartButton(); clearInterval(timerId); clearInterval(spawnTimer); try{ bgmAudio.pause(); }catch(e){}; document.querySelectorAll('.target').forEach(img=>{ if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid=null; } }); }
-  function resumeGame(){ if(!running||!paused) return; paused=false; updateStartButton(); try{ bgmAudio.play().catch(()=>{}); }catch(e){}; runTimer(); startSpawning(); document.querySelectorAll('.target.up').forEach(img=>{ if(!img._hideTid){ img._hideTid=setTimeout(()=>{ instantHide(img); }, 600); } }); }
+  function pauseGame(){ if(!running||paused) return; paused=true; updateStartButton(); clearInterval(timerId); clearTimeout(spawnTimeout); try{ bgmAudio.pause(); }catch(e){}; document.querySelectorAll('.target').forEach(img=>{ if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid=null; } }); }
+  function resumeGame(){ if(!running||!paused) return; paused=false; updateStartButton(); try{ bgmAudio.play().catch(()=>{}); }catch(e){}; runTimer(); scheduleNextSpawn(0); document.querySelectorAll('.target.up').forEach(img=>{ if(!img._hideTid){ img._hideTid=setTimeout(()=>{ instantHide(img); }, 600); } }); }
 
   function runTimer(){ clearInterval(timerId); timerId=setInterval(()=>{ timeLeft--; timeEl.textContent=timeLeft; if(timeLeft<=0){ clearInterval(timerId); timeLeft=0; timeEl.textContent=0; endGame(); } },1000); }
 
-  function startSpawning(){
-    clearInterval(spawnTimer);
-    function tick(){
-      if(paused) return;
-      const holes=[...document.querySelectorAll('.hole')];
-      const count=Math.random()<0.18?2:1;
-      for(let k=0;k<count;k++){
-        const hole=holes[Math.floor(Math.random()*holes.length)];
-        const img=hole.querySelector('.target'); if(img.classList.contains('up')) continue;
-        const isNN=Math.random()<0.2; img.src=isNN?IMG_NN:IMG_CC; img.dataset.kind=isNN?'nn':'cc';
-        img.classList.add('up'); img.classList.remove('hit'); img.style.pointerEvents='auto';
-        const showFor=Math.max(minSpeed, speed + (Math.random()*220-110));
-        img._hideTid=setTimeout(()=>{ instantHide(img); }, showFor);
-      }
-      if(interval>minInterval) interval-=5; if(speed>minSpeed) speed-=4;
-      clearInterval(spawnTimer); spawnTimer=setInterval(tick, interval);
+  function scheduleNextSpawn(delay){ clearTimeout(spawnTimeout); spawnTimeout = setTimeout(spawnTick, delay); }
+  function spawnTick(){
+    if(!running || paused){ scheduleNextSpawn(200); return; }
+    const holes=[...document.querySelectorAll('.hole')];
+    const count=Math.random()<0.18?2:1;
+    for(let k=0;k<count;k++){
+      const hole=holes[Math.floor(Math.random()*holes.length)];
+      const img=hole.querySelector('.target'); if(img.classList.contains('up')) continue;
+      const isNN=Math.random()<0.2; img.src=isNN?IMG_NN:IMG_CC; img.dataset.kind=isNN?'nn':'cc';
+      img.classList.add('up'); img.classList.remove('hit'); img.style.pointerEvents='auto';
+      const showFor=Math.max(minSpeed, speed + (Math.random()*220-110));
+      img._hideTid=setTimeout(()=>{ instantHide(img); }, showFor);
     }
-    spawnTimer=setInterval(tick, interval);
+    if(interval>minInterval) interval-=5; if(speed>minSpeed) speed-=4;
+    scheduleNextSpawn(interval);
   }
 
   function instantHide(img){ img.classList.remove('up'); img.style.pointerEvents='none'; const prev=img.style.transition; img.style.transition='none'; img.style.transform='translateY(110%)'; img.offsetHeight; img.style.transition=prev; img._hideTid=null; }
@@ -237,14 +224,13 @@
   function floatText(el, text){ el.textContent=text; el.style.transition='none'; el.style.opacity='0'; el.style.transform='translate(-50%, 8px) scale(0.96)'; requestAnimationFrame(()=>{ el.style.transition='transform .18s ease, opacity .18s ease'; el.style.opacity='1'; el.style.transform='translate(-50%, -16px) scale(1)'; setTimeout(()=>{ el.style.opacity='0'; }, 180); }); }
 
   async function endGame(){
-    running=false; paused=false; updateStartButton(); clearInterval(spawnTimer); try{ bgmAudio.pause(); }catch(e){}
+    running=false; paused=false; updateStartButton(); clearTimeout(spawnTimeout); try{ bgmAudio.pause(); }catch(e){}
     document.querySelectorAll('.target').forEach(t=>{ instantHide(t); });
-    // オンラインランキング判定（TOP15圏内なら登録モーダル）
     try{
       const lb = await fetchLB();
       const qualifies = lb.length < 15 || score > (lb[lb.length-1]?.score ?? -Infinity);
       if(score !== 0 && qualifies){ nameInput.value = localStorage.getItem(KEY_NAME)||''; entryOverlay.style.display='flex'; }
-    }catch(err){ console.warn('LB fetch failed', err); /* ネット不通でもゲームは継続可 */ }
+    }catch(err){ console.warn('LB fetch failed', err); }
   }
 
   // ===== ランキング（API） =====
@@ -263,7 +249,7 @@
         lbTableBody.appendChild(tr);
       });
     }catch(err){
-      lbTableBody.innerHTML = '<tr><td colspan="4" style="color:#f77; padding:12px;">ランキング取得に失敗しました</td></tr>';
+      lbTableBody.innerHTML = `<tr><td colspan="4" style="color:#f77; padding:12px;">ランキング取得に失敗しました<br><small>${esc(String(err.message||err)).slice(0,160)}</small></td></tr>`;
     }
   }
 
@@ -272,16 +258,17 @@
     localStorage.setItem(KEY_NAME, name);
     entryOverlay.style.display='none';
     try{ await submitScore(name, score); }
-    catch(e){ alert('スコア送信に失敗しました。通信状況をご確認ください。'); }
+    catch(e){ alert('スコア送信に失敗しました
+'+(e.message||e)); }
     await renderLB();
-    celebrateRank(0);
+    celebrateRank();
   }
 
   function celebrateRank(){ try{ congAudio.currentTime=0; congAudio.play().catch(()=>{}); }catch(e){} celebrate.style.display='flex'; spawnConfetti(); setTimeout(()=>{ celebrate.style.display='none'; celebrate.innerHTML='<div class="msg" style="background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.15); backdrop-filter: blur(8px); padding:14px 18px; border-radius:16px; font-size:20px; font-weight:900; box-shadow:0 10px 40px rgba(0,0,0,.5);">🎉 ランクイン！おめでとう！</div>'; }, 2200); }
   function spawnConfetti(){ const colors=['#ff5f6d','#f9cb28','#36d1dc','#5b86e5','#a8ff78','#78ffd6','#c471f5','#fa71cd','#f6d365','#fda085','#f093fb','#f5576c']; const N=60; for(let i=0;i<N;i++){ const d=document.createElement('div'); d.className='confetti'; d.style.position='absolute'; d.style.top='-10vh'; d.style.left=Math.random()*100+'vw'; d.style.width='8px'; d.style.height='14px'; d.style.borderRadius='2px'; d.style.opacity='.95'; d.style.background=colors[Math.floor(Math.random()*colors.length)]; d.style.animation='fall 1.6s linear forwards'; d.style.transform=`translateY(0) rotate(${Math.random()*360}deg)`; celebrate.appendChild(d);} setTimeout(()=>{ document.querySelectorAll('.confetti').forEach(x=>x.remove()); },2400); }
 
   // ===== Util =====
-  function fmtDate(v){ if(!v) return ''; const d=new Date(v.replace(' ','T')); if(isNaN(d)) return v; return `${d.getFullYear()}/${(d.getMonth()+1+'').padStart(2,'0')}/${(d.getDate()+'').padStart(2,'0')} ${(d.getHours()+'').padStart(2,'0')}:${(d.getMinutes()+'').padStart(2,'0')}`; }
+  function fmtDate(v){ if(!v) return ''; const d=new Date((v+'').replace(' ','T')); if(isNaN(d)) return v; return `${d.getFullYear()}/${(d.getMonth()+1+'').padStart(2,'0')}/${(d.getDate()+'').padStart(2,'0')} ${(d.getHours()+'').padStart(2,'0')}:${(d.getMinutes()+'').padStart(2,'0')}`; }
   function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
                                  ">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 
@@ -300,47 +287,75 @@
 </html>
 
 <!-- ============================
-以下、同じサーバー内 /API/ ディレクトリに配置する PHP（前作と共通でOK）
+/API/ 側の PHP （前作と同名でOK。既存 scores を壊さない安全版）
+ポイント：
+- 既存の scores テーブルは一切変更しない
+- scores に game 列が「ある場合」… game で絞る
+- scores に game 列が「ない場合」… whack は scores_whack（新規テーブル）を使用
+- CORS ヘッダ付与、例外時はJSONで理由を返す
 ============================= -->
 
 <!-- File: /API/getscores.php -->
 <?php
-// header
 header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
 
 $game  = isset($_GET['game']) ? substr($_GET['game'], 0, 32) : 'match3';
 $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 15;
 if ($limit < 1 || $limit > 100) $limit = 15;
 
-// ====== DB接続（環境に合わせて修正してください） ======
-$pdo = new PDO('mysql:host=localhost;dbname=game;charset=utf8mb4', 'user', 'pass', [
-  PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-]);
+try {
+  // ← ここはご環境に合わせて設定
+  $pdo = new PDO('mysql:host=mysql324.phy.lolipop.lan;dbname=LA03519144-upos;charset=utf8mb4', 'DB_USER', 'DB_PASS', [ PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION ]);
 
-$stmt = $pdo->prepare("SELECT name, score, ts FROM scores WHERE game = :g ORDER BY score DESC, ts ASC LIMIT :lim");
-$stmt->bindValue(':g', $game, PDO::PARAM_STR);
-$stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
-$stmt->execute();
+  // scores に game 列があるか？
+  $hasGameCol = false;
+  try { $stmt=$pdo->query("SHOW COLUMNS FROM `scores` LIKE 'game'"); $hasGameCol = (bool)$stmt->fetch(); } catch (Throwable $e) { $hasGameCol=false; }
 
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-echo json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  // whack 用の代替テーブル（既存 scores を触らない）
+  if (!$hasGameCol && $game === 'whack') {
+    // 必要なら作成（なければ作る）
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `scores_whack` (
+      `id` INT AUTO_INCREMENT PRIMARY KEY,
+      `name` VARCHAR(32) NOT NULL,
+      `score` INT NOT NULL,
+      `ts` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX (`score`), INDEX (`ts`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-/* ====== 参考：テーブルDDL（最初だけ実行） ======
-CREATE TABLE IF NOT EXISTS scores (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  game VARCHAR(32) NOT NULL,
-  name VARCHAR(32) NOT NULL,
-  score INT NOT NULL,
-  ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX (game, score),
-  INDEX (game, ts)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-*/
+    $sql = "SELECT name, score, ts FROM `scores_whack` ORDER BY score DESC, ts ASC LIMIT :lim";
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    exit;
+  }
+
+  // 通常：scores を使用（game列があれば絞り込む／なければ全体）
+  if ($hasGameCol) {
+    $sql = "SELECT name, score, ts FROM `scores` WHERE game = :g ORDER BY score DESC, ts ASC LIMIT :lim";
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':g', $game, PDO::PARAM_STR);
+  } else {
+    $sql = "SELECT name, score, ts FROM `scores` ORDER BY score DESC, ts ASC LIMIT :lim";
+    $stmt = $pdo->prepare($sql);
+  }
+  $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+  $stmt->execute();
+  echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+} catch (Throwable $e) {
+  http_response_code(500);
+  echo json_encode(['ok'=>false,'err'=>'server','msg'=>$e->getMessage()]);
+}
 ?>
 
 <!-- File: /API/postscores.php -->
 <?php
 header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit; }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo json_encode(['ok'=>false,'err'=>'method']); exit; }
 
 $game  = substr($_POST['game']  ?? 'match3', 0, 32);
@@ -349,9 +364,68 @@ $score = (int)($_POST['score'] ?? 0);
 if ($name === '') $name = '名無しさん';
 if (mb_strlen($name) > 16) $name = mb_substr($name, 0, 16);
 
-$pdo = new PDO('mysql:host=localhost;dbname=game;charset=utf8mb4', 'user', 'pass', [ PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION ]);
-$stmt = $pdo->prepare("INSERT INTO scores(game, name, score) VALUES(:g,:n,:s)");
-$stmt->execute([':g'=>$game, ':n'=>$name, ':s'=>$score]);
+try {
+  // ← ここはご環境に合わせて設定
+  $pdo = new PDO('mysql:host=mysql324.phy.lolipop.lan;dbname=LA03519144-upos;charset=utf8mb4', 'DB_USER', 'DB_PASS', [ PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION ]);
 
-echo json_encode(['ok'=>true]);
+  // scores に game 列があるか？
+  $hasGameCol = false;
+  try { $stmt=$pdo->query("SHOW COLUMNS FROM `scores` LIKE 'game'"); $hasGameCol = (bool)$stmt->fetch(); } catch (Throwable $e) { $hasGameCol=false; }
+
+  if (!$hasGameCol && $game === 'whack') {
+    // 既存 scores は触らず whack 専用テーブルに保存
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `scores_whack` (
+      `id` INT AUTO_INCREMENT PRIMARY KEY,
+      `name` VARCHAR(32) NOT NULL,
+      `score` INT NOT NULL,
+      `ts` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX (`score`), INDEX (`ts`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $stmt = $pdo->prepare("INSERT INTO `scores_whack` (name, score) VALUES(:n,:s)");
+    $stmt->bindValue(':n', $name,  PDO::PARAM_STR);
+    $stmt->bindValue(':s', $score, PDO::PARAM_INT);
+    $stmt->execute();
+    echo json_encode(['ok'=>true]);
+    exit;
+  }
+
+  // 通常：scores を使用（game列があれば分離、なければ従来どおり）
+  if ($hasGameCol) {
+    $stmt = $pdo->prepare("INSERT INTO `scores` (game, name, score) VALUES(:g,:n,:s)");
+    $stmt->bindValue(':g', $game,  PDO::PARAM_STR);
+  } else {
+    $stmt = $pdo->prepare("INSERT INTO `scores` (name, score) VALUES(:n,:s)");
+  }
+  $stmt->bindValue(':n', $name,  PDO::PARAM_STR);
+  $stmt->bindValue(':s', $score, PDO::PARAM_INT);
+  $stmt->execute();
+
+  echo json_encode(['ok'=>true]);
+} catch (Throwable $e) {
+  http_response_code(500);
+  echo json_encode(['ok'=>false,'err'=>'server','msg'=>$e->getMessage()]);
+}
 ?>
+
+<!-- ============================
+MySQL バックアップ方法（phpMyAdmin / コマンド）
+※ 実行用メモ。コードではありません。
+============================= -->
+<!--
+[phpMyAdmin でテーブル scores をバックアップ]
+1) phpMyAdmin ログイン → 左のDB→テーブル scores を選択
+2) 上部「エクスポート」→ 方法: クイック / 形式: SQL → 「実行」
+   → scores_backup_YYYYMMDD.sql がダウンロードされます
+
+[phpMyAdmin でDB全体をバックアップ]
+1) 左のDB名（ルートではなく、今回のDB）をクリック
+2) 「エクスポート」→ クイック / SQL → 実行
+
+[SSH/コマンドでバックアップ]
+$ mysqldump -u <USER> -p <DB名> scores > scores_backup.sql
+# DB全体
+$ mysqldump -u <USER> -p <DB名> > db_backup.sql
+
+→ 何かあればこのファイルを phpMyAdmin の「インポート」から戻せます
+-->
