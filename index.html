@@ -3,36 +3,43 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Whack-a-CC — 1分ランキング（サウンド付き）</title>
+  <title>1分ランキング（サウンド付き・4x4）</title>
   <style>
-    :root { --cols:3; --rows:3; --hole:26vw; --gap:3vw; --radius:2.2vw; }
+    :root { --cols:4; --rows:4; --hole:21vw; --gap:2.5vw; --radius:2vw; }
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
     .wrap { height:100dvh; width:100vw; display:flex; flex-direction:column; align-items:center; box-sizing:border-box; padding:8px 10px; gap:8px; }
     .header { width:100%; display:flex; gap:2vw; align-items:center; justify-content:space-between; }
-    .brand { font-weight:800; font-size:4.4vw; }
+    .brand { display:none; }
     .stats { display:flex; gap:2vw; }
     .badge { background:#1b1b1f; border:1px solid #2a2a33; padding:.9vw 1.6vw; border-radius:999px; font-size:3.6vw; min-width:16vw; text-align:center; }
     .combo { background:#26223a; border:1px solid #3b2f6d; }
     .controls { display:flex; gap:2vw; }
     button { border:none; border-radius:3vw; padding:1.8vw 2.6vw; background:#2b2b33; color:#fff; font-weight:700; font-size:3.6vw; }
+    #startBtn { padding:2.2vw 4vw; min-width:36vw; }
     button:active { transform:translateY(1px); }
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
     .board { width:calc(var(--cols)*var(--hole)+(var(--cols)-1)*var(--gap)); height:calc(var(--rows)*var(--hole)+(var(--rows)-1)*var(--gap)); display:grid; grid-template-columns:repeat(var(--cols),var(--hole)); grid-template-rows:repeat(var(--rows),var(--hole)); gap:var(--gap); }
     .hole { position:relative; background: radial-gradient(ellipse at center,#15151a 0%,#0f0f12 70%,#07070a 100%); border-radius:calc(var(--radius)+4px); overflow:hidden; }
-    .target { position:absolute; inset:auto 0 0 0; margin:auto; width:88%; aspect-ratio:1/1; transform:translateY(110%); transition:.18s; border-radius:12px; pointer-events:auto; }
+    .target { position:absolute; inset:auto 0 0 0; margin:auto; width:88%; aspect-ratio:1/1; transform:translateY(110%); transition: transform .2s cubic-bezier(.2,.7,.2,1), filter .1s ease; border-radius:12px; pointer-events:auto; }
     .target.up { transform:translateY(0); }
     .target.hit { filter:brightness(.8) grayscale(.2); }
-    .float { position:absolute; left:50%; top:30%; transform:translateX(-50%); font-weight:900; font-size:5vw; text-shadow:0 2px 6px rgba(0,0,0,.6); opacity:0; }
+    .float { position:absolute; left:50%; top:30%; transform:translateX(-50%); font-weight:900; font-size:4.2vw; text-shadow:0 2px 6px rgba(0,0,0,.6); opacity:0; }
     .footer { width:100%; display:flex; justify-content:space-between; align-items:center; font-size:3.2vw; }
-    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:1000; }
-    .modal { background:#121219; border:1px solid #2a2a33; border-radius:16px; padding:18px; }
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:1000; padding:12px; }
+    .modal { background:#121219; border:1px solid #2a2a33; border-radius:16px; padding:18px; max-width:560px; width:94vw; }
     .celebrate { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:1100; }
+    @media (min-width: 721px) {
+      :root { --hole:120px; --gap:12px; --radius:14px; }
+      .badge, button { font-size:14px; }
+      .float { font-size:18px; }
+      #startBtn { min-width:180px; }
+    }
   </style>
 </head>
 <body>
 <div class="wrap">
   <header class="header">
-    <div class="brand">Whack-a-CC</div>
+    <div class="brand"></div>
     <div class="stats">
       <div class="badge">Score <span id="score">0</span></div>
       <div class="badge">Time <span id="time">60</span>s</div>
@@ -41,75 +48,181 @@
     <div class="controls">
       <button id="startBtn">スタート</button>
       <button id="lbBtn">ランキング</button>
+      <button id="resetLB" title="ローカルのランキングを初期化">LBリセット</button>
     </div>
   </header>
   <main class="main">
     <div class="board" id="board"></div>
   </main>
-  <footer class="footer">CC.png:加点 ／ NN.png:-50点＆コンボ0</footer>
+  <footer class="footer">クラウンを叩けば加算、セノバイトを叩くと減点。コンボを続けて大量得点GET！</footer>
 </div>
 
+<!-- サウンド -->
 <audio id="smashAudio" src="smash.mp3" preload="auto"></audio>
 <audio id="noAudio" src="no.mp3" preload="auto"></audio>
 <audio id="bgmAudio" src="BGM.mp3" preload="auto" loop></audio>
 <audio id="congAudio" src="cong.mp3" preload="auto"></audio>
 
+<!-- スコア登録モーダル -->
+<div class="overlay" id="entryOverlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2>スコア登録</h2>
+    <p>TOP15に入ったで！名前を入れて登録しよか？</p>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <input id="nameInput" type="text" maxlength="16" placeholder="名前（未入力なら『名無しさん』）" style="flex:1; background:#1b1b22; border:1px solid #2b2b33; border-radius:10px; color:#fff; padding:10px 12px; font-size:16px;" />
+      <button id="saveScore">登録</button>
+      <button id="skipScore">スキップ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ランキングモーダル -->
+<div class="overlay" id="lbOverlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2 style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <span>TOP15 ランキング</span>
+      <button id="closeLB">閉じる</button>
+    </h2>
+    <div class="lb-wrap" style="overflow:auto; max-height:60dvh; border-radius:12px; margin-top:8px;">
+      <table id="lbTable" style="width:100%; border-collapse:separate; border-spacing:0 8px;">
+        <thead><tr><th>#</th><th>名前</th><th>スコア</th><th>日時</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- お祝い -->
+<div class="celebrate" id="celebrate"><div class="msg" style="background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.15); backdrop-filter: blur(8px); padding:14px 18px; border-radius:16px; font-size:20px; font-weight:900; box-shadow:0 10px 40px rgba(0,0,0,.5);">🎉 ランクイン！おめでとう！</div></div>
+
 <script>
 (function(){
-  const board=document.getElementById('board');
+  // スクロール/ジェスチャー抑止
+  const stop = (e)=>{ e.preventDefault(); };
+  document.addEventListener('touchmove', stop, {passive:false});
+  document.addEventListener('gesturestart', stop);
+  window.addEventListener('scroll', ()=> window.scrollTo(0,0));
+
+  const COLS=4, ROWS=4;
+  const boardEl=document.getElementById('board');
   const scoreEl=document.getElementById('score');
   const timeEl=document.getElementById('time');
   const comboEl=document.getElementById('combo');
   const startBtn=document.getElementById('startBtn');
+  const lbBtn=document.getElementById('lbBtn');
+  const resetLB=document.getElementById('resetLB');
+  const lbTableBody=document.querySelector('#lbTable tbody');
+  const lbOverlay=document.getElementById('lbOverlay');
+  const closeLB=document.getElementById('closeLB');
+  const entryOverlay=document.getElementById('entryOverlay');
+  const nameInput=document.getElementById('nameInput');
+  const saveScoreBtn=document.getElementById('saveScore');
+  const skipScoreBtn=document.getElementById('skipScore');
+  const celebrate=document.getElementById('celebrate');
+
   const smashAudio=document.getElementById('smashAudio');
   const noAudio=document.getElementById('noAudio');
   const bgmAudio=document.getElementById('bgmAudio');
+  const congAudio=document.getElementById('congAudio');
 
-  const IMG_CC='CC.png'; const IMG_NN='NN.png';
-  let score=0,combo=0,timeLeft=60,timerId,spawnTimer,running=false;
+  const KEY_LB='whack_v3_leaderboard';
+  const KEY_NAME='whack_v3_last_name';
+  const IMG_CC='CC.png';
+  const IMG_NN='NN.png';
+
+  let score=0, combo=0, timeLeft=60, timerId=null, spawnTimer=null, running=false;
+  // 速度（少しだけ遅く）
+  let speed=1050, interval=900; // 表示時間ms / スポーン間隔ms
+  const minSpeed=600, minInterval=520; // 加速の下限
 
   function buildBoard(){
-    board.innerHTML='';
-    for(let i=0;i<9;i++){
+    boardEl.innerHTML='';
+    for(let i=0;i<COLS*ROWS;i++){
       const hole=document.createElement('div'); hole.className='hole';
-      const img=document.createElement('img'); img.className='target';
-      img.addEventListener('pointerdown',onHit);
+      const img=document.createElement('img'); img.className='target'; img.alt='target'; img.draggable=false; img.decoding='async';
+      img.addEventListener('pointerdown', onHit, {passive:true});
       hole.appendChild(img);
       const fl=document.createElement('div'); fl.className='float'; hole.appendChild(fl);
-      board.appendChild(hole);
+      boardEl.appendChild(hole);
     }
   }
 
   function setScore(v){ score=v; scoreEl.textContent=v; }
   function setCombo(v){ combo=v; comboEl.textContent=v; }
 
-  function start(){ if(running) return; running=true; score=0; combo=0; timeLeft=60; setScore(0); setCombo(0); timeEl.textContent=timeLeft; startBtn.disabled=true; bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); runTimer(); spawn(); }
-
-  function runTimer(){ clearInterval(timerId); timerId=setInterval(()=>{ timeLeft--; timeEl.textContent=timeLeft; if(timeLeft<=0){ clearInterval(timerId); endGame(); } },1000); }
-
-  function spawn(){ clearInterval(spawnTimer); spawnTimer=setInterval(()=>{
-    const holes=[...document.querySelectorAll('.hole')];
-    const hole=holes[Math.floor(Math.random()*holes.length)];
-    const img=hole.querySelector('.target');
-    const isNN=Math.random()<0.2;
-    img.src=isNN?IMG_NN:IMG_CC; img.dataset.kind=isNN?'nn':'cc';
-    img.classList.add('up');
-    setTimeout(()=>{ img.classList.remove('up'); },700);
-  },800); }
-
-  function onHit(e){
-    if(!running) return;
-    const img=e.currentTarget; if(!img.classList.contains('up')) return;
-    img.classList.remove('up');
-    if(img.dataset.kind==='cc'){ combo++; score+=combo; smashAudio.currentTime=0; smashAudio.play().catch(()=>{}); }
-    else { combo=0; score-=50; noAudio.currentTime=0; noAudio.play().catch(()=>{}); }
-    setScore(score); setCombo(combo);
+  function start(){
+    if(running) return; running=true; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft; startBtn.disabled=true;
+    [smashAudio,noAudio,bgmAudio,congAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
+    try{ bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); }catch(e){}
+    runTimer(); startSpawning();
   }
 
-  function endGame(){ running=false; clearInterval(spawnTimer); bgmAudio.pause(); startBtn.disabled=false; }
+  function runTimer(){ clearInterval(timerId); timerId=setInterval(()=>{ timeLeft--; timeEl.textContent=timeLeft; if(timeLeft<=0){ clearInterval(timerId); timeLeft=0; timeEl.textContent=0; endGame(); } },1000); }
 
-  buildBoard();
-  startBtn.addEventListener('click',start);
+  function startSpawning(){
+    clearInterval(spawnTimer);
+    function tick(){
+      const holes=[...document.querySelectorAll('.hole')];
+      const count=Math.random()<0.18?2:1; // たまに2体
+      for(let k=0;k<count;k++){
+        const hole=holes[Math.floor(Math.random()*holes.length)];
+        const img=hole.querySelector('.target'); if(img.classList.contains('up')) continue;
+        const isNN=Math.random()<0.2; img.src=isNN?IMG_NN:IMG_CC; img.dataset.kind=isNN?'nn':'cc';
+        img.classList.add('up'); img.classList.remove('hit'); img.style.pointerEvents='auto';
+        const showFor=Math.max(minSpeed, speed + (Math.random()*220-110));
+        setTimeout(()=>{ img.classList.remove('up'); img.style.pointerEvents='none'; }, showFor);
+      }
+      if(interval>minInterval) interval-=5; if(speed>minSpeed) speed-=4;
+      clearInterval(spawnTimer); spawnTimer=setInterval(tick, interval);
+    }
+    spawnTimer=setInterval(tick, interval);
+  }
+
+  function onHit(e){
+    if(!running) return; const img=e.currentTarget; if(!img.classList.contains('up')||img.classList.contains('hit')) return;
+    img.classList.add('hit'); img.style.pointerEvents='none';
+    const hole=img.parentElement; const fl=hole.querySelector('.float');
+    if(img.dataset.kind==='cc'){ setCombo(combo+1); setScore(score+combo); playAudio(smashAudio); floatText(fl, `+${combo}`); }
+    else { setCombo(0); setScore(score-50); playAudio(noAudio); floatText(fl, `-50`); }
+  }
+
+  function playAudio(a){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(e){} }
+
+  function floatText(el, text){ el.textContent=text; el.style.transition='none'; el.style.opacity='0'; el.style.transform='translate(-50%, 10px)'; requestAnimationFrame(()=>{ el.style.transition='transform .22s ease, opacity .22s ease'; el.style.opacity='1'; el.style.transform='translate(-50%, -18px)'; setTimeout(()=>{ el.style.opacity='0'; }, 220); }); }
+
+  function endGame(){
+    running=false; startBtn.disabled=false; clearInterval(spawnTimer); try{ bgmAudio.pause(); }catch(e){}
+    document.querySelectorAll('.target').forEach(t=>{ t.classList.remove('up'); t.style.pointerEvents='none'; });
+    // ランキング判定
+    const lb=getLB(); const qualifies= lb.length<15 || score > (lb[lb.length-1]?.score ?? -1);
+    if(score!==0 && qualifies){ nameInput.value=localStorage.getItem(KEY_NAME)||''; entryOverlay.style.display='flex'; }
+  }
+
+  // ランキング
+  function getLB(){ try{ return JSON.parse(localStorage.getItem(KEY_LB)||'[]'); }catch(e){ return []; } }
+  function saveLB(list){ localStorage.setItem(KEY_LB, JSON.stringify(list)); }
+  function insertScore(name,score){ const now=new Date(); const entry={name:(name||'').trim()||'名無しさん',score,ts:now.toISOString()}; const lb=getLB(); lb.push(entry); lb.sort((a,b)=>b.score-a.score); const cut=lb.slice(0,15); saveLB(cut); return cut.findIndex(x=>x===entry); }
+  function renderLB(){ const lb=getLB(); const tbody=lbTableBody; tbody.innerHTML=''; lb.forEach((r,idx)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td style="width:56px; text-align:center; font-weight:800;">${idx+1}</td><td style="max-width:38vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(r.name)}</td><td style="text-align:right; font-weight:900;">${r.score.toLocaleString()}</td><td style="opacity:.7; font-size:12px;">${fmtDate(r.ts)}</td>`; tbody.appendChild(tr); }); }
+  function fmtDate(iso){ try{ const d=new Date(iso); return `${d.getFullYear()}/${(d.getMonth()+1+'').padStart(2,'0')}/${(d.getDate()+'').padStart(2,'0')} ${(d.getHours()+'').padStart(2,'0')}:${(d.getMinutes()+'').padStart(2,'0')}` }catch(e){ return ''; } }
+  function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
+                                 ">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+  function finalizeEntry(){ const name=nameInput.value.trim(); localStorage.setItem(KEY_NAME,name); entryOverlay.style.display='none'; const rank=insertScore(name,score); renderLB(); celebrateRank(rank); }
+  function celebrateRank(rank){ try{ congAudio.currentTime=0; congAudio.play().catch(()=>{}); }catch(e){} celebrate.style.display='flex'; spawnConfetti(); setTimeout(()=>{ celebrate.style.display='none'; celebrate.innerHTML='<div class="msg" style="background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.15); backdrop-filter: blur(8px); padding:14px 18px; border-radius:16px; font-size:20px; font-weight:900; box-shadow:0 10px 40px rgba(0,0,0,.5);">🎉 ランクイン！おめでとう！</div>'; }, 2200); }
+  function spawnConfetti(){ const colors=['#ff5f6d','#f9cb28','#36d1dc','#5b86e5','#a8ff78','#78ffd6','#c471f5','#fa71cd','#f6d365','#fda085','#f093fb','#f5576c']; const N=60; for(let i=0;i<N;i++){ const d=document.createElement('div'); d.className='confetti'; d.style.position='absolute'; d.style.top='-10vh'; d.style.left=Math.random()*100+'vw'; d.style.width='8px'; d.style.height='14px'; d.style.borderRadius='2px'; d.style.opacity='.95'; d.style.background=colors[Math.floor(Math.random()*colors.length)]; d.style.animation='fall 1.6s linear forwards'; d.style.transform=`translateY(0) rotate(${Math.random()*360}deg)`; celebrate.appendChild(d);} setTimeout(()=>{ document.querySelectorAll('.confetti').forEach(x=>x.remove()); },2400); }
+
+  // イベント
+  document.getElementById('saveScore').addEventListener('click', finalizeEntry);
+  document.getElementById('skipScore').addEventListener('click', ()=>{ entryOverlay.style.display='none'; showLeaderboard(); });
+  document.getElementById('lbBtn').addEventListener('click', ()=> showLeaderboard());
+  document.getElementById('resetLB').addEventListener('click', ()=>{ if(confirm('ローカルのランキングを削除します。よろしいですか？')){ localStorage.setItem(KEY_LB,'[]'); renderLB(); } });
+  document.getElementById('closeLB').addEventListener('click', ()=> lbOverlay.style.display='none');
+
+  function showLeaderboard(){ renderLB(); lbOverlay.style.display='flex'; }
+
+  // 初期化
+  buildBoard(); renderLB();
+  startBtn.addEventListener('click', start);
 })();
 </script>
 </body>
