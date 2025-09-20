@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>1分ランキング（サウンド付き・4x4・オフライン）</title>
+  <title>1分（4×4・オフライン）</title>
   <style>
     :root { --cols:4; --rows:4; --hole:21vw; --gap:2.5vw; --radius:2vw; }
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
@@ -14,9 +14,8 @@
     .badge { background:#1b1b1f; border:1px solid #2a2a33; padding:.9vw 1.6vw; border-radius:999px; font-size:3.6vw; min-width:16vw; text-align:center; }
 
     .controls { display:flex; gap:2vw; align-items:center; }
-    button { border:none; border-radius:3vw; padding:1.2vw 2.2vw; background:#2b2b33; color:#fff; font-weight:700; font-size:3.6vw; }
+    button { border:none; border-radius:3vw; padding:1.2vw 2.2vw; background:#2563eb; color:#fff; font-weight:700; font-size:3.6vw; } /* 青ボタン */
     button:active { transform:translateY(1px); }
-    #startBtn { background:#2563eb; color:#fff; padding:1.4vw 3.2vw; min-width:28vw; } /* 青ボタン */
 
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
     .board { width:calc(var(--cols)*var(--hole)+(var(--cols)-1)*var(--gap)); height:calc(var(--rows)*var(--hole)+(var(--rows)-1)*var(--gap)); display:grid; grid-template-columns:repeat(var(--cols),var(--hole)); grid-template-rows:repeat(var(--rows),var(--hole)); gap:var(--gap); }
@@ -28,15 +27,9 @@
 
     .footer { width:100%; display:flex; justify-content:space-between; align-items:center; font-size:3.2vw; }
 
-    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:1000; padding:12px; }
-    .modal { background:#121219; border:1px solid #2a2a33; border-radius:16px; padding:18px; max-width:560px; width:94vw; }
-    .celebrate { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:1100; pointer-events:none; }
-
     @media (min-width: 721px) {
       :root { --hole:120px; --gap:12px; --radius:14px; }
       .badge, button { font-size:14px; }
-      #startBtn { min-width:140px; }
-      .float { font-size:18px; }
     }
   </style>
 </head>
@@ -67,7 +60,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // ===== スクロール/ジェスチャー抑止 =====
+  // ===== スワイプ/ズーム抑止 =====
   const stop = (e)=>{ e.preventDefault(); };
   document.addEventListener('touchmove', stop, {passive:false});
   document.addEventListener('gesturestart', stop);
@@ -92,13 +85,13 @@ document.addEventListener('DOMContentLoaded', () => {
   let timerId=null, spawnTimeout=null;
   let running=false, paused=false;
 
-  // ==== 出現テンポ（一定のまま）====
-  const SHOW_MS    = 1050; // 出ている時間（一定）
-  const SPAWN_MS   = 900;  // 出現間隔（一定）
-  const DOUBLE_PROB= 0.18; // たまに2体出る
-  const NN_PROB    = 0.20; // NNの確率
+  // ===== 出現テンポ（一定） =====
+  const SHOW_MS  = 1050; // 出てる時間
+  const SPAWN_MS = 900;  // 出現間隔
+  const DOUBLE_P = 0.18; // 2体率
+  const NN_P     = 0.20; // NN率
 
-  // ===== 盤面作成 =====
+  // ===== 盤面 =====
   function buildBoard(){
     boardEl.innerHTML='';
     for(let i=0;i<COLS*ROWS;i++){
@@ -113,10 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setScore(v){ score=v; scoreEl.textContent=v; }
   function setCombo(v){ combo=v; }
-
-  function updateStartButton(){
-    startBtn.textContent = !running ? 'スタート' : (paused ? '再開' : '一時停止');
-  }
+  function updateStartButton(){ startBtn.textContent = !running ? 'スタート' : (paused ? '再開' : '一時停止'); }
 
   function startGame(){
     running=true; paused=false; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
@@ -149,32 +139,37 @@ document.addEventListener('DOMContentLoaded', () => {
     },1000);
   }
 
-  // ===== 出現（一定ペース） =====
+  // ===== 出現（一定ペース・穴は何度でも使える） =====
   function scheduleNextSpawn(delay){ clearTimeout(spawnTimeout); spawnTimeout = setTimeout(spawnTick, delay); }
   function spawnTick(){
     if(!running || paused){ scheduleNextSpawn(200); return; }
     const holes=[...document.querySelectorAll('.hole')];
-    const count=Math.random()<DOUBLE_PROB?2:1;
+    const count=Math.random()<DOUBLE_P?2:1;
     for(let k=0;k<count;k++){
       const hole=holes[Math.floor(Math.random()*holes.length)];
-      const img=hole.querySelector('.target'); if(img.classList.contains('up')) continue;
-      const isNN=Math.random()<NN_PROB; img.src=isNN?IMG_NN:IMG_CC; img.dataset.kind=isNN?'nn':'cc';
-      img.classList.add('up'); img.classList.remove('hit'); img.style.pointerEvents='auto';
+      const img=hole.querySelector('.target');
+      if(img.classList.contains('up')) continue;           // その瞬間に出てるならスキップ
+      img.style.removeProperty('transform');               // ★ 前回のインラインtransformを確実に消す
+      const isNN=Math.random()<NN_P;
+      img.src=isNN?IMG_NN:IMG_CC;
+      img.dataset.kind=isNN?'nn':'cc';
+      img.classList.add('up');
+      img.classList.remove('hit');
+      img.style.pointerEvents='auto';
       img._hideTid=setTimeout(()=>{ instantHide(img); }, SHOW_MS);
     }
-    scheduleNextSpawn(SPAWN_MS); // ← 変えない（一定のまま）
+    scheduleNextSpawn(SPAWN_MS);
   }
 
-  // 叩いたら“必ず”即時に引っ込む
+  // ★即退避：インラインtransformを残さない（これが今回のバグ修正の核心）
   function instantHide(img){
     img.classList.remove('up');
     img.style.pointerEvents='none';
-    const prev = img.style.transition;
-    img.style.transition = 'none';
-    img.style.transform  = 'translateY(110%)';
-    img.offsetHeight; // reflow
-    img.style.transition = prev;
-    img._hideTid = null;
+    img.style.transition='none';
+    img.style.removeProperty('transform'); // ← インラインを消してCSS既定(transform: translateY(110%))に戻す
+    img.offsetHeight;                       // reflow
+    img.style.transition='';                // 以降のアニメに備えてクリア
+    img._hideTid=null;
   }
 
   function onHit(e){
@@ -184,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     img.classList.add('hit');
     if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid=null; }
-    instantHide(img); // 即退避
+    instantHide(img);
 
     const hole=img.parentElement; const fl=hole.querySelector('.float');
     if(img.dataset.kind==='cc'){
@@ -215,16 +210,11 @@ document.addEventListener('DOMContentLoaded', () => {
     running=false; paused=false; updateStartButton(); clearTimeout(spawnTimeout);
     try{ bgmAudio.pause(); }catch(e){}
     document.querySelectorAll('.target').forEach(t=> instantHide(t));
-    // ここでは単に効果音だけ（ランキング等は完全排除）
     try{ congAudio.currentTime=0; congAudio.play().catch(()=>{}); }catch(e){}
-    // 必要なら alert に切替可
-    // alert(`タイムアップ！スコア: ${score}`);
   }
 
-  // ===== イベント =====
-  startBtn.addEventListener('click', toggleStartPause);
-
-  // ===== 初期化 =====
+  // ===== イベント＆初期化 =====
+  startBtn.addEventListener('click', ()=>{ if(!running) startGame(); else if(!paused) pauseGame(); else resumeGame(); });
   buildBoard(); updateStartButton();
 });
 </script>
