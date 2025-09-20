@@ -3,18 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>1分（4×4・オフライン）</title>
+  <title>1分（4×4・オフライン固定テンポ）</title>
   <style>
-    :root { --cols:4; --rows:4; --hole:21vw; --gap:2.5vw; --radius:2vw; }
+    :root { --cols:4; --rows:4; --hole:21vw; --gap:2.2vw; --radius:2vw; }
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
-    .wrap { height:100dvh; width:100vw; display:flex; flex-direction:column; align-items:center; box-sizing:border-box; padding:8px 10px; gap:8px; }
+    .wrap { height:100dvh; width:100vw; display:flex; flex-direction:column; align-items:center; box-sizing:border-box; padding:6px 8px; gap:6px; }
 
     .header { width:100%; display:flex; gap:2vw; align-items:center; justify-content:space-between; }
     .stats { display:flex; gap:2vw; align-items:center; }
-    .badge { background:#1b1b1f; border:1px solid #2a2a33; padding:.9vw 1.6vw; border-radius:999px; font-size:3.6vw; min-width:16vw; text-align:center; }
+    .badge { background:#1b1b1f; border:1px solid #2a2a33; padding:1.2vw 2.2vw; border-radius:999px; font-size:5.4vw; min-width:18vw; text-align:center; line-height:1; }
+    .badge span { display:inline-block; min-width:10vw; }
 
     .controls { display:flex; gap:2vw; align-items:center; }
-    button { border:none; border-radius:3vw; padding:1.2vw 2.2vw; background:#2563eb; color:#fff; font-weight:700; font-size:3.6vw; } /* 青ボタン */
+    button { border:none; border-radius:5vw; padding:1.6vw 4.8vw; background:#2563eb; color:#fff; font-weight:800; font-size:5.0vw; }
     button:active { transform:translateY(1px); }
 
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
@@ -23,13 +24,16 @@
     .target { position:absolute; inset:auto 0 0 0; margin:auto; width:88%; aspect-ratio:1/1; transform:translateY(110%); transition: transform .2s cubic-bezier(.2,.7,.2,1), filter .1s ease; border-radius:12px; pointer-events:auto; }
     .target.up { transform:translateY(0); }
     .target.hit { filter:brightness(.85) grayscale(.2); }
-    .float { position:absolute; left:50%; top:30%; transform:translateX(-50%); font-weight:900; font-size:4.2vw; text-shadow:0 2px 6px rgba(0,0,0,.6); opacity:0; pointer-events:none; }
+    .float { position:absolute; left:50%; top:30%; transform:translateX(-50%); font-weight:900; font-size:4.6vw; text-shadow:0 2px 6px rgba(0,0,0,.6); opacity:0; pointer-events:none; }
 
-    .footer { width:100%; display:flex; justify-content:space-between; align-items:center; font-size:3.2vw; }
+    .footer { width:100%; display:flex; justify-content:center; align-items:center; font-size:3.6vw; text-align:center; padding-bottom:2px; }
 
     @media (min-width: 721px) {
       :root { --hole:120px; --gap:12px; --radius:14px; }
-      .badge, button { font-size:14px; }
+      .badge { font-size:22px; padding:8px 14px; }
+      .controls button { font-size:22px; padding:10px 22px; border-radius:24px; }
+      .float { font-size:18px; }
+      .footer { font-size:15px; }
     }
   </style>
 </head>
@@ -49,7 +53,7 @@
     <div class="board" id="board"></div>
   </main>
 
-  <footer class="footer">クラウンを叩けば加算、セノバイトを叩くと減点。コンボを続けて大量得点GET！</footer>
+  <footer class="footer">クラウンを叩けば加点（最大10点)セノバイトを叩くと-10点。10コンボを継続して高得点を狙おう！</footer>
 </div>
 
 <!-- サウンド -->
@@ -85,8 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let timerId=null, spawnTimeout=null;
   let running=false, paused=false;
 
-  // ===== 出現テンポ（一定） =====
-  const SHOW_MS  = 1050; // 出てる時間
+  // ===== 固定テンポ =====
+  const SHOW_MS  = 1050; // 出ている時間
   const SPAWN_MS = 900;  // 出現間隔
   const DOUBLE_P = 0.18; // 2体率
   const NN_P     = 0.20; // NN率
@@ -139,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },1000);
   }
 
-  // ===== 出現（一定ペース・穴は何度でも使える） =====
+  // ===== 出現（一定ペース・何度でも同じ穴OK） =====
   function scheduleNextSpawn(delay){ clearTimeout(spawnTimeout); spawnTimeout = setTimeout(spawnTick, delay); }
   function spawnTick(){
     if(!running || paused){ scheduleNextSpawn(200); return; }
@@ -148,8 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
     for(let k=0;k<count;k++){
       const hole=holes[Math.floor(Math.random()*holes.length)];
       const img=hole.querySelector('.target');
-      if(img.classList.contains('up')) continue;           // その瞬間に出てるならスキップ
-      img.style.removeProperty('transform');               // ★ 前回のインラインtransformを確実に消す
+      if(img.classList.contains('up')) continue;
+      img.style.removeProperty('transform');           // 前回のインラインtransformを消す
       const isNN=Math.random()<NN_P;
       img.src=isNN?IMG_NN:IMG_CC;
       img.dataset.kind=isNN?'nn':'cc';
@@ -161,14 +165,14 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleNextSpawn(SPAWN_MS);
   }
 
-  // ★即退避：インラインtransformを残さない（これが今回のバグ修正の核心）
+  // 即退避（インラインtransformを残さない）
   function instantHide(img){
     img.classList.remove('up');
     img.style.pointerEvents='none';
     img.style.transition='none';
-    img.style.removeProperty('transform'); // ← インラインを消してCSS既定(transform: translateY(110%))に戻す
+    img.style.removeProperty('transform'); // CSS既定の translateY(110%) に戻す
     img.offsetHeight;                       // reflow
-    img.style.transition='';                // 以降のアニメに備えてクリア
+    img.style.transition='';
     img._hideTid=null;
   }
 
@@ -183,15 +187,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const hole=img.parentElement; const fl=hole.querySelector('.float');
     if(img.dataset.kind==='cc'){
+      // コンボ+1、加点は最大10点にキャップ
       setCombo(combo+1);
-      setScore(score+combo);
+      const add = Math.min(combo, 10);
+      setScore(score + add);
       playAudio(smashAudio);
-      floatText(fl, `+${combo}`);
+      floatText(fl, `+${add}`);
     }else{
+      // ミスでコンボ切れ、-10点
       setCombo(0);
-      setScore(score-50);
+      setScore(score - 10);
       playAudio(noAudio);
-      floatText(fl, `-50`);
+      floatText(fl, `-10`);
     }
   }
 
