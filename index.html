@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>ハゲたたき</title>
+  <title>1分（4×4・オフライン固定テンポ）</title>
   <style>
     :root { --cols:4; --rows:4; --hole:21vw; --gap:2.2vw; --radius:2vw; }
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
@@ -28,12 +28,21 @@
 
     .footer { width:100%; display:flex; justify-content:center; align-items:center; font-size:3.6vw; text-align:center; padding-bottom:2px; }
 
+    /* 結果発表 */
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:1200; padding:12px; }
+    .resultBox { background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.15); backdrop-filter: blur(6px); border-radius:18px; padding:22px 24px; text-align:center; }
+    .resultScore { font-size:12vw; font-weight:900; line-height:1.1; }
+    .resultBtns { margin-top:12px; }
+    .resultBtns button { font-size:5vw; padding:1.2vw 4vw; border-radius:4vw; background:#2563eb; color:#fff; border:none; font-weight:800; }
+
     @media (min-width: 721px) {
       :root { --hole:120px; --gap:12px; --radius:14px; }
       .badge { font-size:22px; padding:8px 14px; }
       .controls button { font-size:22px; padding:10px 22px; border-radius:24px; }
       .float { font-size:18px; }
       .footer { font-size:15px; }
+      .resultScore { font-size:72px; }
+      .resultBtns button { font-size:20px; padding:8px 18px; border-radius:14px; }
     }
   </style>
 </head>
@@ -61,6 +70,15 @@
 <audio id="noAudio" src="no.mp3" preload="auto"></audio>
 <audio id="bgmAudio" src="BGM.mp3" preload="auto" loop></audio>
 <audio id="congAudio" src="cong.mp3" preload="auto"></audio>
+<audio id="muchiAudio" src="muchi.mp3" preload="auto"></audio>
+
+<!-- 結果発表 -->
+<div class="overlay" id="resultOverlay" role="dialog" aria-modal="true">
+  <div class="resultBox">
+    <div class="resultScore" id="resultText">スコア 0点</div>
+    <div class="resultBtns"><button id="restartBtn">もう一度</button></div>
+  </div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -76,6 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const scoreEl=document.getElementById('score');
   const timeEl=document.getElementById('time');
   const startBtn=document.getElementById('startBtn');
+  const resultOverlay=document.getElementById('resultOverlay');
+  const resultText=document.getElementById('resultText');
+  const restartBtn=document.getElementById('restartBtn');
+const muchiAudio = document.getElementById('muchiAudio');
 
   const smashAudio=document.getElementById('smashAudio');
   const noAudio=document.getElementById('noAudio');
@@ -90,9 +112,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let running=false, paused=false;
 
   // ===== 固定テンポ =====
-  const SHOW_MS  = 1050; // 出ている時間
-  const SPAWN_MS = 900;  // 出現間隔
-  const DOUBLE_P = 0.18; // 2体率
+  const SHOW_MS  = 1050; // 出ている時間（一定）
+  const SPAWN_MS = 900;  // 出現間隔（一定）
+  const BATCH_MIN = 3;   // 同時出現の最小
+  const BATCH_MAX = 4;   // 同時出現の最大
   const NN_P     = 0.20; // NN率
 
   // ===== 盤面 =====
@@ -114,7 +137,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startGame(){
     running=true; paused=false; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
-    [smashAudio,noAudio,bgmAudio,congAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
+    resultOverlay.style.display='none';
+    [smashAudio, noAudio, bgmAudio, congAudio, muchiAudio].forEach(a=>{
+  try{ a.load(); }catch(e){}
+});
     try{ bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); }catch(e){}
     runTimer(); scheduleNextSpawn(SPAWN_MS); updateStartButton();
   }
@@ -144,16 +170,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ===== 出現（一定ペース・何度でも同じ穴OK） =====
+  const randInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+
   function scheduleNextSpawn(delay){ clearTimeout(spawnTimeout); spawnTimeout = setTimeout(spawnTick, delay); }
   function spawnTick(){
     if(!running || paused){ scheduleNextSpawn(200); return; }
+
     const holes=[...document.querySelectorAll('.hole')];
-    const count=Math.random()<DOUBLE_P?2:1;
-    for(let k=0;k<count;k++){
-      const hole=holes[Math.floor(Math.random()*holes.length)];
-      const img=hole.querySelector('.target');
-      if(img.classList.contains('up')) continue;
-      img.style.removeProperty('transform');           // 前回のインラインtransformを消す
+    const targets = holes.map(h=>h.querySelector('.target'));
+    const available = targets.filter(img=>!img.classList.contains('up')); // いま出ていない穴だけ
+
+    const want = randInt(BATCH_MIN, BATCH_MAX);
+    const n = Math.min(want, available.length);
+
+    // ランダムに n 個選んで同時出現
+    for (let i=0;i<n;i++){
+      const idx = randInt(0, available.length-1);
+      const img = available.splice(idx,1)[0];
+
+      img.style.removeProperty('transform'); // 前回のインラインtransformを消す
       const isNN=Math.random()<NN_P;
       img.src=isNN?IMG_NN:IMG_CC;
       img.dataset.kind=isNN?'nn':'cc';
@@ -162,6 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
       img.style.pointerEvents='auto';
       img._hideTid=setTimeout(()=>{ instantHide(img); }, SHOW_MS);
     }
+
     scheduleNextSpawn(SPAWN_MS);
   }
 
@@ -186,20 +222,20 @@ document.addEventListener('DOMContentLoaded', () => {
     instantHide(img);
 
     const hole=img.parentElement; const fl=hole.querySelector('.float');
-    if(img.dataset.kind==='cc'){
-      // コンボ+1、加点は最大10点にキャップ
-      setCombo(combo+1);
-      const add = Math.min(combo, 10);
-      setScore(score + add);
-      playAudio(smashAudio);
-      floatText(fl, `+${add}`);
-    }else{
-      // ミスでコンボ切れ、-10点
-      setCombo(0);
-      setScore(score - 10);
-      playAudio(noAudio);
-      floatText(fl, `-10`);
-    }
+    if (img.dataset.kind === 'cc') {
+  setCombo(combo + 1);
+  const add = Math.min(combo, 10);
+  setScore(score + add);
+  // ★ 10コンボ目以降は muchi.mp3
+  const sfx = (combo >= 10) ? muchiAudio : smashAudio;
+  playAudio(sfx);
+  floatText(fl, `+${add}`);
+} else {
+  setCombo(0);
+  setScore(score - 10);
+  playAudio(noAudio);
+  floatText(fl, `-10`);
+}
   }
 
   function playAudio(a){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(e){} }
@@ -218,10 +254,15 @@ document.addEventListener('DOMContentLoaded', () => {
     try{ bgmAudio.pause(); }catch(e){}
     document.querySelectorAll('.target').forEach(t=> instantHide(t));
     try{ congAudio.currentTime=0; congAudio.play().catch(()=>{}); }catch(e){}
+
+    // 結果発表
+    resultText.textContent = `スコア ${score}点`;
+    resultOverlay.style.display='flex';
   }
 
   // ===== イベント＆初期化 =====
   startBtn.addEventListener('click', ()=>{ if(!running) startGame(); else if(!paused) pauseGame(); else resumeGame(); });
+  restartBtn.addEventListener('click', ()=>{ startGame(); });
   buildBoard(); updateStartButton();
 });
 </script>
