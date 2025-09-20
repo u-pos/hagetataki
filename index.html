@@ -213,30 +213,36 @@ const muchiAudio = document.getElementById('muchiAudio');
   }
 
   function onHit(e){
-    if(!running || paused) return;
-    const img=e.currentTarget;
-    if(!img.classList.contains('up')||img.classList.contains('hit')) return;
+  if(!running || paused) return;
+  const img = e.currentTarget;
+  if(!img.classList.contains('up') || img.classList.contains('hit')) return;
 
-    img.classList.add('hit');
-    if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid=null; }
-    instantHide(img);
+  img.classList.add('hit');
+  if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid = null; }
+  instantHide(img);
 
-    const hole=img.parentElement; const fl=hole.querySelector('.float');
-    if (img.dataset.kind === 'cc') {
-  setCombo(combo + 1);
-  const add = Math.min(combo, 10);
-  setScore(score + add);
-  // ★ 10コンボ目以降は muchi.mp3
-  const sfx = (combo >= 10) ? muchiAudio : smashAudio;
-  playAudio(sfx);
-  floatText(fl, `+${add}`);
-} else {
-  setCombo(0);
-  setScore(score - 10);
-  playAudio(noAudio);
-  floatText(fl, `-10`);
-}
+  const hole = img.parentElement;
+  const fl   = hole.querySelector('.float');
+
+  if (img.dataset.kind === 'cc') {
+    // コンボ＋加点（最大10点）
+    setCombo(combo + 1);
+    const add = Math.min(combo, 10);
+    setScore(score + add);
+    // 10コンボ目以降は muchi.mp3（無ければ既存効果音）
+    const sfx = (typeof muchiAudio !== 'undefined' && combo >= 10) ? muchiAudio : smashAudio;
+    playAudio(sfx);
+    // ★ 10コンボ目以降は黄色＆1.4倍
+    const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
+    floatText(fl, `+${add}`, opts);
+  } else {
+    // ミス：コンボ切れ＆-10点、赤＆1.4倍
+    setCombo(0);
+    setScore(score - 10);
+    playAudio(noAudio);
+    floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
   }
+}
 
   function playAudio(a){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(e){} }
   // 既存の floatText をまるごと差し替え
