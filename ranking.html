@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>ハゲたたき</title>
+  <title>1分（4×4・固定テンポ・ランキング対応）</title>
   <style>
     :root { --cols:4; --rows:4; --hole:21vw; --gap:2.2vw; --radius:2vw; }
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
-    .wrap { height:100dvh; width:100vw; display:flex; flex-direction:column; align-items:center; box-sizing:border-box; padding:6px 8px; gap:6px; }
+    .wrap { height:100dvh; width:100vw; display:flex; flex-direction:column; align-items:center; box-sizing:border-box; padding:6px 8px; gap:6px; position:relative; }
 
     .header { width:100%; display:flex; gap:2vw; align-items:center; justify-content:space-between; }
     .stats { display:flex; gap:2vw; align-items:center; }
@@ -28,11 +28,23 @@
 
     .footer { width:100%; display:flex; justify-content:center; align-items:center; font-size:3.6vw; text-align:center; padding-bottom:2px; }
 
-    /* 結果発表 */
+    /* 10コンボ演出（簡易） */
+    .wrap.combo::before{
+      content:"";
+      position:fixed; inset:0;
+      pointer-events:none; mix-blend-mode:screen;
+      background: linear-gradient(120deg, rgba(255,215,0,0) 35%, rgba(255,215,0,.20) 50%, rgba(255,215,0,0) 65%);
+      background-size:200% 100%; background-position:0% 0;
+      animation: shine 1.9s linear infinite; opacity:.55;
+    }
+    @keyframes shine { to { background-position:200% 0; } }
+
+    /* オーバーレイ: 結果, ランキング, 登録 */
     .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:1200; padding:12px; }
+    .modal { background:#121219; border:1px solid #2a2a33; border-radius:16px; padding:18px; max-width:560px; width:94vw; }
     .resultBox { background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.15); backdrop-filter: blur(6px); border-radius:18px; padding:22px 24px; text-align:center; }
     .resultScore { font-size:12vw; font-weight:900; line-height:1.1; }
-    .resultBtns { margin-top:12px; }
+    .resultBtns { margin-top:12px; display:flex; gap:10px; justify-content:center; }
     .resultBtns button { font-size:5vw; padding:1.2vw 4vw; border-radius:4vw; background:#2563eb; color:#fff; border:none; font-weight:800; }
 
     @media (min-width: 721px) {
@@ -40,7 +52,7 @@
       .badge { font-size:22px; padding:8px 14px; }
       .controls button { font-size:22px; padding:10px 22px; border-radius:24px; }
       .float { font-size:18px; }
-      .footer { font-size:15px; text-aligh:left; }
+      .footer { font-size:15px; }
       .resultScore { font-size:72px; }
       .resultBtns button { font-size:20px; padding:8px 18px; border-radius:14px; }
     }
@@ -54,6 +66,7 @@
       <div class="badge">Time <span id="time">60</span>s</div>
     </div>
     <div class="controls">
+      <button id="lbBtn" style="background:#1b1b1f;border:1px solid #2a2a33;">ランキング</button>
       <button id="startBtn">スタート</button>
     </div>
   </header>
@@ -61,8 +74,8 @@
   <main class="main">
     <div class="board" id="board"></div>
   </main>
-<span style="color:yellow;">【ルール説明】</span>
-  <footer class="footer">◆クラウンを連続で叩けば加点（最大10点)<br />◆セノバイトを叩くと-10点かつコンボ終了<br />◆10コンボをキープして高得点を狙おう！！</footer>
+
+  <footer class="footer">クラウンを連続で叩けば加点（最大10点)！セノバイトを叩くと-10点。10コンボを継続して高得点を狙おう！</footer>
 </div>
 
 <!-- サウンド -->
@@ -76,7 +89,41 @@
 <div class="overlay" id="resultOverlay" role="dialog" aria-modal="true">
   <div class="resultBox">
     <div class="resultScore" id="resultText">スコア 0点</div>
-    <div class="resultBtns"><button id="restartBtn">もう一度</button></div>
+    <div class="resultBtns">
+      <button id="restartBtn">もう一度</button>
+      <button id="resultToLB">ランキング</button>
+    </div>
+  </div>
+</div>
+
+<!-- ランキング -->
+<div class="overlay" id="lbOverlay" role="dialog" aria-modal="true" style="z-index:1250;">
+  <div class="modal">
+    <h2 style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <span>TOP15 ランキング</span>
+      <button id="closeLB" style="background:#2b2b33;">閉じる</button>
+    </h2>
+    <div class="lb-wrap" style="overflow:auto; max-height:60dvh; border-radius:12px; margin-top:8px;">
+      <table id="lbTable" style="width:100%; border-collapse:separate; border-spacing:0 8px;">
+        <thead><tr><th>#</th><th>名前</th><th>スコア</th><th>日時</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="lbErr" style="margin-top:8px;color:#f88;font-size:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- スコア登録 -->
+<div class="overlay" id="entryOverlay" role="dialog" aria-modal="true" style="z-index:1300;">
+  <div class="modal">
+    <h2>スコア登録</h2>
+    <p>TOP15に入ったで！名前を入れて登録しよか？</p>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <input id="nameInput" type="text" maxlength="16" placeholder="名前（未入力なら『名無しさん』）"
+             style="flex:1; background:#1b1b22; border:1px solid #2b2b33; border-radius:10px; color:#fff; padding:10px 12px; font-size:16px;" />
+      <button id="saveScore">登録</button>
+      <button id="skipScore">スキップ</button>
+    </div>
   </div>
 </div>
 
@@ -88,35 +135,74 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('gesturestart', stop);
   window.addEventListener('scroll', ()=> window.scrollTo(0,0));
 
+  // ===== API設定 =====
+  const API_BASE = "https://junkhin.com/api"; // 前作と同じAPI
+  const GAME_ID  = "whack";                   // このゲーム識別子（DBで分離）
+
   // ===== 定数 =====
   const COLS=4, ROWS=4;
   const boardEl=document.getElementById('board');
   const scoreEl=document.getElementById('score');
   const timeEl=document.getElementById('time');
   const startBtn=document.getElementById('startBtn');
+  const lbBtn=document.getElementById('lbBtn');
+
   const resultOverlay=document.getElementById('resultOverlay');
   const resultText=document.getElementById('resultText');
   const restartBtn=document.getElementById('restartBtn');
-const muchiAudio = document.getElementById('muchiAudio');
+  const resultToLB=document.getElementById('resultToLB');
+
+  const lbOverlay=document.getElementById('lbOverlay');
+  const lbTableBody=document.querySelector('#lbTable tbody');
+  const lbErr=document.getElementById('lbErr');
+  const closeLB=document.getElementById('closeLB');
+
+  const entryOverlay=document.getElementById('entryOverlay');
+  const nameInput=document.getElementById('nameInput');
+  const saveScoreBtn=document.getElementById('saveScore');
+  const skipScoreBtn=document.getElementById('skipScore');
 
   const smashAudio=document.getElementById('smashAudio');
   const noAudio=document.getElementById('noAudio');
   const bgmAudio=document.getElementById('bgmAudio');
   const congAudio=document.getElementById('congAudio');
+  const muchiAudio=document.getElementById('muchiAudio');
+
+  const root = document.querySelector('.wrap');
+  function enableComboFx(){ root.classList.add('combo'); }
+  function disableComboFx(){ root.classList.remove('combo'); }
 
   const IMG_CC='CC.png';
   const IMG_NN='NN.png';
+  const KEY_NAME='whack_name';
 
   let score=0, combo=0, timeLeft=60;
   let timerId=null, spawnTimeout=null;
   let running=false, paused=false;
 
   // ===== 固定テンポ =====
-  const SHOW_MS  = 1050; // 出ている時間（一定）
-  const SPAWN_MS = 900;  // 出現間隔（一定）
+  const SHOW_MS  = 1050; // 出ている時間
+  const SPAWN_MS = 900;  // 出現間隔
   const BATCH_MIN = 3;   // 同時出現の最小
   const BATCH_MAX = 4;   // 同時出現の最大
   const NN_P     = 0.20; // NN率
+  const randInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+
+  // ===== API =====
+  async function fetchLB(){
+    const url = `${API_BASE}/getscores.php?game=${encodeURIComponent(GAME_ID)}&limit=15`;
+    const res = await fetch(url, { cache:'no-store' });
+    if(!res.ok) throw new Error(`GET ${res.status}`);
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(r=>({name:r.name??'名無しさん', score:+r.score||0, ts:r.ts??''})) : [];
+  }
+  async function submitScore(name,score){
+    const url = `${API_BASE}/postscores.php`;
+    const body = new URLSearchParams({ game: GAME_ID, name, score: String(score) });
+    const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+    if(!res.ok) throw new Error(`POST ${res.status}`);
+    return await res.json();
+  }
 
   // ===== 盤面 =====
   function buildBoard(){
@@ -137,11 +223,10 @@ const muchiAudio = document.getElementById('muchiAudio');
 
   function startGame(){
     running=true; paused=false; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
-    resultOverlay.style.display='none';
-    [smashAudio, noAudio, bgmAudio, congAudio, muchiAudio].forEach(a=>{
-  try{ a.load(); }catch(e){}
-});
+    resultOverlay.style.display='none'; entryOverlay.style.display='none'; lbOverlay.style.display='none';
+    [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
     try{ bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); }catch(e){}
+    disableComboFx();
     runTimer(); scheduleNextSpawn(SPAWN_MS); updateStartButton();
   }
   function toggleStartPause(){ if(!running){ startGame(); } else if(!paused){ pauseGame(); } else { resumeGame(); } }
@@ -155,6 +240,7 @@ const muchiAudio = document.getElementById('muchiAudio');
   function resumeGame(){
     if(!running||!paused) return; paused=false; updateStartButton();
     try{ bgmAudio.play().catch(()=>{}); }catch(e){}
+    if (combo >= 10) enableComboFx(); else disableComboFx();
     runTimer(); scheduleNextSpawn(0);
     document.querySelectorAll('.target.up').forEach(img=>{
       if(!img._hideTid){ img._hideTid=setTimeout(()=>{ instantHide(img); }, 600); }
@@ -169,26 +255,19 @@ const muchiAudio = document.getElementById('muchiAudio');
     },1000);
   }
 
-  // ===== 出現（一定ペース・何度でも同じ穴OK） =====
-  const randInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
-
   function scheduleNextSpawn(delay){ clearTimeout(spawnTimeout); spawnTimeout = setTimeout(spawnTick, delay); }
   function spawnTick(){
     if(!running || paused){ scheduleNextSpawn(200); return; }
 
-    const holes=[...document.querySelectorAll('.hole')];
-    const targets = holes.map(h=>h.querySelector('.target'));
-    const available = targets.filter(img=>!img.classList.contains('up')); // いま出ていない穴だけ
-
+    const targets = [...document.querySelectorAll('.hole .target')];
+    const available = targets.filter(img=>!img.classList.contains('up'));
     const want = randInt(BATCH_MIN, BATCH_MAX);
     const n = Math.min(want, available.length);
 
-    // ランダムに n 個選んで同時出現
     for (let i=0;i<n;i++){
       const idx = randInt(0, available.length-1);
       const img = available.splice(idx,1)[0];
-
-      img.style.removeProperty('transform'); // 前回のインラインtransformを消す
+      img.style.removeProperty('transform');
       const isNN=Math.random()<NN_P;
       img.src=isNN?IMG_NN:IMG_CC;
       img.dataset.kind=isNN?'nn':'cc';
@@ -201,77 +280,135 @@ const muchiAudio = document.getElementById('muchiAudio');
     scheduleNextSpawn(SPAWN_MS);
   }
 
-  // 即退避（インラインtransformを残さない）
   function instantHide(img){
     img.classList.remove('up');
     img.style.pointerEvents='none';
     img.style.transition='none';
-    img.style.removeProperty('transform'); // CSS既定の translateY(110%) に戻す
-    img.offsetHeight;                       // reflow
+    img.style.removeProperty('transform');
+    img.offsetHeight;
     img.style.transition='';
     img._hideTid=null;
   }
 
   function onHit(e){
-  if(!running || paused) return;
-  const img = e.currentTarget;
-  if(!img.classList.contains('up') || img.classList.contains('hit')) return;
+    if(!running || paused) return;
+    const img=e.currentTarget;
+    if(!img.classList.contains('up')||img.classList.contains('hit')) return;
 
-  img.classList.add('hit');
-  if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid = null; }
-  instantHide(img);
+    img.classList.add('hit');
+    if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid=null; }
+    instantHide(img);
 
-  const hole = img.parentElement;
-  const fl   = hole.querySelector('.float');
+    const fl=img.parentElement.querySelector('.float');
 
-  if (img.dataset.kind === 'cc') {
-    // コンボ＋加点（最大10点）
-    setCombo(combo + 1);
-    const add = Math.min(combo, 10);
-    setScore(score + add);
-    // 10コンボ目以降は muchi.mp3（無ければ既存効果音）
-    const sfx = (typeof muchiAudio !== 'undefined' && combo >= 10) ? muchiAudio : smashAudio;
-    playAudio(sfx);
-    // ★ 10コンボ目以降は黄色＆1.4倍
-    const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
-    floatText(fl, `+${add}`, opts);
-  } else {
-    // ミス：コンボ切れ＆-10点、赤＆1.4倍
-    setCombo(0);
-    setScore(score - 10);
-    playAudio(noAudio);
-    floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
+    if (img.dataset.kind === 'cc') {
+      setCombo(combo + 1);
+      const add = Math.min(combo, 10);
+      setScore(score + add);
+      const sfx = (combo >= 10) ? muchiAudio : smashAudio;
+      playAudio(sfx);
+      const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
+      floatText(fl, `+${add}`, opts);
+      if (combo >= 10) enableComboFx(); else disableComboFx();
+    } else {
+      setCombo(0);
+      setScore(score - 10);
+      playAudio(noAudio);
+      floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
+      disableComboFx();
+    }
   }
-}
 
   function playAudio(a){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(e){} }
-  // 既存の floatText をまるごと差し替え
   function floatText(el, text, opts = {}) {
-  const scale = opts.scale || 1;
-  el.textContent = text;
-  el.style.color = opts.color || ''; // ← 指定なければ元の色に戻す
-  el.style.transition = 'none';
-  el.style.opacity = '0';
-  el.style.transform = `translate(-50%, 8px) scale(${0.96 * scale})`;
-  requestAnimationFrame(() => {
-    el.style.transition = 'transform .18s ease, opacity .18s ease';
-    el.style.opacity = '1';
-    el.style.transform = `translate(-50%, -16px) scale(${1 * scale})`;
-    setTimeout(() => { el.style.opacity = '0'; }, 180);
-  });
-}
+    const scale = opts.scale || 1;
+    el.textContent = text;
+    el.style.color = opts.color || '';
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    el.style.transform = `translate(-50%, 8px) scale(${0.96 * scale})`;
+    requestAnimationFrame(() => {
+      el.style.transition = 'transform .18s ease, opacity .18s ease';
+      el.style.opacity = '1';
+      el.style.transform = `translate(-50%, -16px) scale(${1 * scale})`;
+      setTimeout(() => { el.style.opacity = '0'; }, 180);
+    });
+  }
 
-
-  function endGame(){
+  async function endGame(){
     running=false; paused=false; updateStartButton(); clearTimeout(spawnTimeout);
     try{ bgmAudio.pause(); }catch(e){}
     document.querySelectorAll('.target').forEach(t=> instantHide(t));
+    disableComboFx();
     try{ congAudio.currentTime=0; congAudio.play().catch(()=>{}); }catch(e){}
 
     // 結果発表
     resultText.textContent = `スコア ${score}点`;
     resultOverlay.style.display='flex';
+
+    // ランクイン候補なら登録モーダルへ誘導（自動判定）
+    try{
+      const lb = await fetchLB();
+      const qualifies = (score>0) && (lb.length < 15 || score > (lb[lb.length-1]?.score ?? -Infinity));
+      if (qualifies) {
+        // 連続操作をシンプルに：結果→そのまま登録モーダルを表示
+        nameInput.value = localStorage.getItem(KEY_NAME)||'';
+        entryOverlay.style.display='flex';
+      }
+    }catch(e){
+      // APIエラー時は何もしない（ゲーム継続可能）
+    }
   }
+
+  // ===== ランキング表示 =====
+  lbBtn.addEventListener('click', ()=>{ lbOverlay.style.display='flex'; renderLB(); });
+  resultToLB.addEventListener('click', ()=>{ resultOverlay.style.display='none'; lbOverlay.style.display='flex'; renderLB(); });
+  closeLB.addEventListener('click', ()=> lbOverlay.style.display='none');
+
+  async function renderLB(){
+    lbErr.textContent=''; lbTableBody.innerHTML = '<tr><td colspan="4" style="opacity:.7; padding:12px;">読み込み中…</td></tr>';
+    try{
+      const lb = await fetchLB();
+      lbTableBody.innerHTML='';
+      lb.forEach((r,idx)=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td style="width:56px; text-align:center; font-weight:800;">${idx+1}</td>
+          <td style="max-width:38vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(r.name)}</td>
+          <td style="text-align:right; font-weight:900;">${Number(r.score).toLocaleString()}</td>
+          <td style="opacity:.7; font-size:12px;">${fmtDate(r.ts)}</td>`;
+        lbTableBody.appendChild(tr);
+      });
+      if(lb.length===0){
+        lbTableBody.innerHTML = '<tr><td colspan="4" style="opacity:.7; padding:12px;">まだ登録がありません</td></tr>';
+      }
+    }catch(err){
+      lbTableBody.innerHTML = '';
+      lbErr.textContent = 'ランキングの取得に失敗しました。API設定やCORSをご確認ください。';
+    }
+  }
+
+  // ===== スコア登録 =====
+  saveScoreBtn.addEventListener('click', finalizeEntry);
+  skipScoreBtn.addEventListener('click', ()=>{ entryOverlay.style.display='none'; });
+
+  async function finalizeEntry(){
+    const name = (nameInput.value||'').trim() || '名無しさん';
+    localStorage.setItem(KEY_NAME, name);
+    try{
+      await submitScore(name, score);
+      entryOverlay.style.display='none';
+      // 投稿成功→ランキングを見せる
+      lbOverlay.style.display='flex';
+      await renderLB();
+    }catch(err){
+      alert('スコア送信に失敗しました。APIのURL/サーバーを確認してください。');
+    }
+  }
+
+  // ===== Util =====
+  function fmtDate(v){ if(!v) return ''; const d=new Date((v+'').replace(' ','T')); if(isNaN(d)) return v; return `${d.getFullYear()}/${(d.getMonth()+1+'').padStart(2,'0')}/${(d.getDate()+'').padStart(2,'0')} ${(d.getHours()+'').padStart(2,'0')}:${(d.getMinutes()+'').padStart(2,'0')}`; }
+  function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 
   // ===== イベント＆初期化 =====
   startBtn.addEventListener('click', ()=>{ if(!running) startGame(); else if(!paused) pauseGame(); else resumeGame(); });
