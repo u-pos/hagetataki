@@ -239,15 +239,22 @@ const muchiAudio = document.getElementById('muchiAudio');
   }
 
   function playAudio(a){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(e){} }
-  function floatText(el, text){
-    el.textContent=text;
-    el.style.transition='none'; el.style.opacity='0'; el.style.transform='translate(-50%, 8px) scale(0.96)';
-    requestAnimationFrame(()=>{
-      el.style.transition='transform .18s ease, opacity .18s ease';
-      el.style.opacity='1'; el.style.transform='translate(-50%, -16px) scale(1)';
-      setTimeout(()=>{ el.style.opacity='0'; }, 180);
-    });
-  }
+  // 既存の floatText をまるごと差し替え
+  function floatText(el, text, opts = {}) {
+  const scale = opts.scale || 1;
+  el.textContent = text;
+  el.style.color = opts.color || ''; // ← 指定なければ元の色に戻す
+  el.style.transition = 'none';
+  el.style.opacity = '0';
+  el.style.transform = `translate(-50%, 8px) scale(${0.96 * scale})`;
+  requestAnimationFrame(() => {
+    el.style.transition = 'transform .18s ease, opacity .18s ease';
+    el.style.opacity = '1';
+    el.style.transform = `translate(-50%, -16px) scale(${1 * scale})`;
+    setTimeout(() => { el.style.opacity = '0'; }, 180);
+  });
+}
+
 
   function endGame(){
     running=false; paused=false; updateStartButton(); clearTimeout(spawnTimeout);
