@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ===== API =====
   async function fetchLB(){
-    const url = `${API_BASE}/getscores.php?game=${encodeURIComponent(GAME_ID)}&limit=15`;
+    const url = `${API_BASE}/get_scores.php?game=${encodeURIComponent(GAME_ID)}&limit=15`;
     const res = await fetch(url, { cache:'no-store' });
     if(!res.ok) throw new Error(`GET ${res.status}`);
     const data = await res.json();
