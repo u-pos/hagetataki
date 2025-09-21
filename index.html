@@ -7,7 +7,7 @@
   <style>
     :root { --cols:4; --rows:4; --hole:21vw; --gap:2.2vw; --radius:2vw; }
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
-    .wrap { height:100dvh; width:100vw; display:flex; flex-direction:column; align-items:center; box-sizing:border-box; padding:6px 8px; gap:6px; }
+    .wrap { height:100dvh; width:100vw; display:flex; flex-direction:column; align-items:center; box-sizing:border-box; padding:6px 8px; gap:6px; position:relative; }
 
     .header { width:100%; display:flex; gap:2vw; align-items:center; justify-content:space-between; }
     .stats { display:flex; gap:2vw; align-items:center; }
@@ -19,7 +19,7 @@
     button:active { transform:translateY(1px); }
 
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
-    .board { width:calc(var(--cols)*var(--hole)+(var(--cols)-1)*var(--gap)); height:calc(var(--rows)*var(--hole)+(var(--rows)-1)*var(--gap)); display:grid; grid-template-columns:repeat(var(--cols),var(--hole)); grid-template-rows:repeat(var(--rows),var(--hole)); gap:var(--gap); }
+    .board { width:calc(var(--cols)*var(--hole)+(var(--cols)-1)*var(--gap)); height:calc(var(--rows)*var(--hole)+(var(--rows)-1)*var(--gap)); display:grid; grid-template-columns:repeat(var(--cols),var(--hole)); grid-template-rows:repeat(var(--rows),var(--hole)); gap:var(--gap); transition:filter .3s ease; }
     .hole { position:relative; background: radial-gradient(ellipse at center,#15151a 0%,#0f0f12 70%,#07070a 100%); border-radius:calc(var(--radius)+4px); overflow:hidden; }
     .target { position:absolute; inset:auto 0 0 0; margin:auto; width:88%; aspect-ratio:1/1; transform:translateY(110%); transition: transform .2s cubic-bezier(.2,.7,.2,1), filter .1s ease; border-radius:12px; pointer-events:auto; }
     .target.up { transform:translateY(0); }
@@ -69,6 +69,26 @@
     .lb-score { min-width:5em; text-align:right; font-weight:900; }
     .lb-time  { opacity:.7; font-size:12px; margin-left:8px; }
 
+    /* ===== 10コンボFEVER演出（簡易・虹色発光） ===== */
+    @keyframes rainbowShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    @keyframes hueSpin { from{ filter:hue-rotate(0deg) saturate(1.3); } to{ filter:hue-rotate(360deg) saturate(1.3); } }
+
+    .wrap.fever::before{
+      content:"";
+      position:fixed; inset:0; pointer-events:none; z-index:200;
+      background: linear-gradient(130deg,
+        rgba(255,0,0,.18), rgba(255,154,0,.18), rgba(208,222,33,.18),
+        rgba(79,220,74,.18), rgba(63,218,216,.18), rgba(47,201,226,.18),
+        rgba(28,127,238,.18), rgba(95,21,242,.18), rgba(186,12,248,.18), rgba(251,7,217,.18)
+      );
+      background-size: 400% 400%;
+      animation: rainbowShift 6s linear infinite;
+    }
+    .wrap.fever .board{
+      animation: hueSpin 6s linear infinite;
+      box-shadow: 0 0 22px 6px rgba(255,255,255,.14), inset 0 0 40px rgba(255,255,255,.08);
+    }
+
     @media (min-width: 721px) {
       :root { --hole:120px; --gap:12px; --radius:14px; }
       .badge { font-size:22px; padding:8px 14px; }
@@ -113,6 +133,8 @@
 <audio id="bgmAudio" src="BGM.mp3" preload="auto" loop></audio>
 <audio id="congAudio" src="cong.mp3" preload="auto"></audio>
 <audio id="muchiAudio" src="muchi.mp3" preload="auto"></audio>
+<!-- ★ 追加：9→10到達ジングル -->
+<audio id="feverAudio" src="fever.mp3" preload="auto"></audio>
 
 <!-- 一時停止 -->
 <div id="pauseOverlay" class="pause-overlay">
@@ -153,6 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ===== 定数 =====
   const COLS=4, ROWS=4;
+  const wrapEl=document.querySelector('.wrap');
   const boardEl=document.getElementById('board');
   const scoreEl=document.getElementById('score');
   const timeEl=document.getElementById('time');
@@ -167,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const noAudio=document.getElementById('noAudio');
   const bgmAudio=document.getElementById('bgmAudio');
   const congAudio=document.getElementById('congAudio');
+  const feverAudio=document.getElementById('feverAudio'); // ★
 
   const pauseOverlay=document.getElementById('pauseOverlay');
   const resumeBtn=document.getElementById('resumeBtn');
@@ -214,9 +238,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startGame(){
     running=true; paused=false; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
+    wrapEl.classList.remove('fever'); // ★ FEVER解除
     hideResult(); hideRanking();
-    [smashAudio, noAudio, bgmAudio, congAudio, muchiAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
-    [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio].forEach(a=> a.muted = muted);
+    [smashAudio, noAudio, bgmAudio, congAudio, muchiAudio, feverAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
+    [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio,feverAudio].forEach(a=> a.muted = muted);
     try{ bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); }catch(e){}
     runTimer(); scheduleNextSpawn(SPAWN_MS); updateStartButton();
   }
@@ -256,17 +281,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const holes=[...document.querySelectorAll('.hole')];
     const targets = holes.map(h=>h.querySelector('.target'));
-    const available = targets.filter(img=>!img.classList.contains('up')); // いま出ていない穴だけ
+    const available = targets.filter(img=>!img.classList.contains('up'));
 
     const want = randInt(BATCH_MIN, BATCH_MAX);
     const n = Math.min(want, available.length);
 
-    // ランダムに n 個選んで同時出現
     for (let i=0;i<n;i++){
       const idx = randInt(0, available.length-1);
       const img = available.splice(idx,1)[0];
 
-      img.style.removeProperty('transform'); // 前回のインラインtransformを消す
+      img.style.removeProperty('transform');
       const isNN=Math.random()<NN_P;
       img.src=isNN?IMG_NN:IMG_CC;
       img.dataset.kind=isNN?'nn':'cc';
@@ -279,13 +303,12 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleNextSpawn(SPAWN_MS);
   }
 
-  // 即退避（インラインtransformを残さない）
   function instantHide(img){
     img.classList.remove('up');
     img.style.pointerEvents='none';
     img.style.transition='none';
-    img.style.removeProperty('transform'); // CSS既定の translateY(110%) に戻す
-    img.offsetHeight;                       // reflow
+    img.style.removeProperty('transform');
+    img.offsetHeight;
     img.style.transition='';
     img._hideTid=null;
   }
@@ -303,22 +326,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const fl   = hole.querySelector('.float');
 
     if (img.dataset.kind === 'cc') {
-      // コンボ＋加点（最大10点）
+      const prevCombo = combo;        // ★ 到達判定用
       setCombo(combo + 1);
       const add = Math.min(combo, 10);
       setScore(score + add);
-      // 10コンボ目以降は muchi.mp3（無ければ既存効果音）
-      const sfx = (typeof muchiAudio !== 'undefined' && combo >= 10) ? muchiAudio : smashAudio;
+
+      // 9→10に到達した瞬間にfever再生＋虹色ON
+      if(prevCombo < 10 && combo >= 10){
+        playAudio(feverAudio);
+        wrapEl.classList.add('fever');
+      }
+
+      // 10コンボ目以降は muchi.mp3、未満は smash.mp3
+      const sfx = (combo >= 10) ? muchiAudio : smashAudio;
       playAudio(sfx);
-      // 10コンボ目以降は黄色＆1.4倍
+
+      // 10コンボ継続中は黄色＆1.4倍
       const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
       floatText(fl, `+${add}`, opts);
     } else {
-      // ミス：コンボ切れ＆-10点、赤＆1.4倍
+      // ミス：コンボ切れ＆-10点、赤＆1.4倍、FEVER解除
       setCombo(0);
       setScore(score - 10);
       playAudio(noAudio);
       floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
+      wrapEl.classList.remove('fever'); // ★ FEVER解除
     }
   }
 
@@ -349,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const entry = { name: (name||'').trim() || '名無しさん', score: Number(scoreVal)||0, ts: new Date().toISOString() };
     const lb = getLB();
     lb.push(entry);
-    lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts)); // 高得点優先・同点は古い方を上
+    lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts));
     const cut = lb.slice(0, TOP_LIMIT);
     saveLB(cut);
     return cut.findIndex(x => x === entry);
@@ -384,11 +416,11 @@ document.addEventListener('DOMContentLoaded', () => {
     try{ bgmAudio.pause(); }catch(e){}
     document.querySelectorAll('.target').forEach(t=> instantHide(t));
     try{ congAudio.currentTime=0; congAudio.muted = muted; congAudio.play().catch(()=>{}); }catch(e){}
+    wrapEl.classList.remove('fever'); // ★ FEVER解除
 
     const qualifies = isTopLocal(score);
     const lastName = localStorage.getItem(KEY_NAME) || '';
 
-    // 結果発表（名前登録 or リスタート）
     if(qualifies){
       resultText.textContent = `スコア ${score}点`;
       resultBtns.innerHTML = `
@@ -423,12 +455,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ===== イベント＆初期化 =====
   startBtn.addEventListener('click', toggleStartPause);
-  restartBtn.addEventListener('click', ()=>{ startGame(); }); // 初回表示用
+  restartBtn.addEventListener('click', ()=>{ startGame(); }); // 初期のダミー
 
   // ミュート
   muteBtn.addEventListener('click', ()=>{
     muted = !muted;
-    [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio].forEach(a=> a.muted = muted);
+    [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio,feverAudio].forEach(a=> a.muted = muted);
     muteBtn.textContent = muted ? '🔈' : '🔇';
   });
 
