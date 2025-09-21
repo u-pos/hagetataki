@@ -28,12 +28,46 @@
 
     .footer { width:100%; display:flex; justify-content:center; align-items:center; font-size:3.6vw; text-align:center; padding-bottom:2px; }
 
-    /* 結果発表 */
+    /* 結果発表（全画面） */
     .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:1200; padding:12px; }
     .resultBox { background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.15); backdrop-filter: blur(6px); border-radius:18px; padding:22px 24px; text-align:center; }
     .resultScore { font-size:12vw; font-weight:900; line-height:1.1; }
-    .resultBtns { margin-top:12px; }
+    .resultBtns { margin-top:12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
     .resultBtns button { font-size:5vw; padding:1.2vw 4vw; border-radius:4vw; background:#2563eb; color:#fff; border:none; font-weight:800; }
+
+    /* 一時停止オーバーレイ（画面全体を覆う） */
+    .pause-overlay{
+      position: fixed; inset: 0; width:100vw; height:100dvh;
+      display: none; align-items: center; justify-content: center;
+      background: black; z-index: 1300; flex-direction: column; color: white; border-radius: 0;
+      gap: 16px; padding: 16px;
+    }
+    #pauseText{ font-weight:900; font-size:clamp(22px,8vw,56px); letter-spacing:.02em; text-shadow:0 2px 10px rgba(0,0,0,.35); }
+    .pause-overlay .start-btn{ font-size:clamp(18px,6vw,28px); padding:12px 28px; border-radius:999px; }
+
+    /* 下部アイコン列 */
+    .bottom-buttons {display:flex;justify-content:center;align-items:center;gap:1.5rem;margin-top:0.4rem;}
+    .icon-btn {background:none;border:none;font-size:2.8rem;color:white;cursor:pointer;}
+
+    /* ランキング（localStorage／TOP5） */
+    #rankingOverlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 1400; display: none; justify-content: center; align-items: center; padding: 12px;
+    }
+    .ranking-content {
+      background: rgba(20,20,24,0.95); color: #fff; padding: 14px; border-radius: 12px;
+      width: 92vw; max-width: 580px; display: flex; flex-direction: column; max-height: 80vh; overflow-y: auto;
+    }
+    .ranking-content h2 { text-align:center; margin: 4px 0 8px; }
+    .lb-list { list-style: none; padding: 0; margin: 0; }
+    .lb-list li {
+      display:flex; gap:8px; align-items:center; justify-content:space-between;
+      background: rgba(255,255,255,0.06); margin:6px 0; padding:8px 10px; border-radius:10px;
+    }
+    .lb-rank { width:2.4em; text-align:center; font-weight:900; }
+    .lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lb-score { min-width:5em; text-align:right; font-weight:900; }
+    .lb-time  { opacity:.7; font-size:12px; margin-left:8px; }
 
     @media (min-width: 721px) {
       :root { --hole:120px; --gap:12px; --radius:14px; }
@@ -61,8 +95,16 @@
   <main class="main">
     <div class="board" id="board"></div>
   </main>
-<span style="color:yellow;">【ルール説明】</span>
+
+  <span style="color:yellow;">【ルール説明】</span>
   <footer class="footer">◆クラウンを連続で叩けば加点（最大10点)<br />◆セノバイトを叩くと-10点かつコンボ終了<br />◆10コンボをキープして高得点を狙おう！！</footer>
+
+  <!-- 下部アイコン -->
+  <div class="bottom-buttons">
+    <button id="muteBtn" class="icon-btn" title="ミュート切替">🔇</button>
+    <button id="pauseBtn" class="icon-btn" title="一時停止">⏸</button>
+    <button id="rankingBtn" class="icon-btn" title="ローカルランキング">🏆</button>
+  </div>
 </div>
 
 <!-- サウンド -->
@@ -72,11 +114,32 @@
 <audio id="congAudio" src="cong.mp3" preload="auto"></audio>
 <audio id="muchiAudio" src="muchi.mp3" preload="auto"></audio>
 
+<!-- 一時停止 -->
+<div id="pauseOverlay" class="pause-overlay">
+  <div id="pauseText">一時停止中</div>
+  <button id="resumeBtn" class="start-btn">▶ 再開</button>
+</div>
+
 <!-- 結果発表 -->
 <div class="overlay" id="resultOverlay" role="dialog" aria-modal="true">
-  <div class="resultBox">
+  <div class="resultBox" id="resultBox">
     <div class="resultScore" id="resultText">スコア 0点</div>
-    <div class="resultBtns"><button id="restartBtn">もう一度</button></div>
+    <div class="resultBtns" id="resultBtns"><button id="restartBtn">もう一度</button></div>
+  </div>
+</div>
+
+<!-- ランキング（localStorage／TOP5） -->
+<div id="rankingOverlay">
+  <div class="ranking-content">
+    <div style="display:flex; justify-content:flex-end;">
+      <button id="closeRanking" class="icon-btn" style="font-size:2rem;">✖</button>
+    </div>
+    <h2>🏆 ローカルランキング TOP5</h2>
+    <ol id="rankingList" class="lb-list"></ol>
+    <div id="lbEmpty" style="opacity:.7; text-align:center; padding:8px; display:none;">まだ記録がありません</div>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:10px;">
+      <button id="lbRestart" class="start-btn" style="background:linear-gradient(90deg,#7b61ff,#3cd3ad);">RESTART</button>
+    </div>
   </div>
 </div>
 
@@ -96,13 +159,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const startBtn=document.getElementById('startBtn');
   const resultOverlay=document.getElementById('resultOverlay');
   const resultText=document.getElementById('resultText');
+  const resultBtns=document.getElementById('resultBtns');
   const restartBtn=document.getElementById('restartBtn');
-const muchiAudio = document.getElementById('muchiAudio');
 
+  const muchiAudio = document.getElementById('muchiAudio');
   const smashAudio=document.getElementById('smashAudio');
   const noAudio=document.getElementById('noAudio');
   const bgmAudio=document.getElementById('bgmAudio');
   const congAudio=document.getElementById('congAudio');
+
+  const pauseOverlay=document.getElementById('pauseOverlay');
+  const resumeBtn=document.getElementById('resumeBtn');
+  const pauseBtn=document.getElementById('pauseBtn');
+  const muteBtn=document.getElementById('muteBtn');
+
+  const rankingBtn = document.getElementById('rankingBtn');
+  const rankingOverlay = document.getElementById('rankingOverlay');
+  const closeRanking = document.getElementById('closeRanking');
+  const lbRestartBtn = document.getElementById('lbRestart');
+  const rankingList = document.getElementById('rankingList');
+  const lbEmpty = document.getElementById('lbEmpty');
 
   const IMG_CC='CC.png';
   const IMG_NN='NN.png';
@@ -110,6 +186,7 @@ const muchiAudio = document.getElementById('muchiAudio');
   let score=0, combo=0, timeLeft=60;
   let timerId=null, spawnTimeout=null;
   let running=false, paused=false;
+  let muted=false;
 
   // ===== 固定テンポ =====
   const SHOW_MS  = 1050; // 出ている時間（一定）
@@ -137,10 +214,9 @@ const muchiAudio = document.getElementById('muchiAudio');
 
   function startGame(){
     running=true; paused=false; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
-    resultOverlay.style.display='none';
-    [smashAudio, noAudio, bgmAudio, congAudio, muchiAudio].forEach(a=>{
-  try{ a.load(); }catch(e){}
-});
+    hideResult(); hideRanking();
+    [smashAudio, noAudio, bgmAudio, congAudio, muchiAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
+    [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio].forEach(a=> a.muted = muted);
     try{ bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); }catch(e){}
     runTimer(); scheduleNextSpawn(SPAWN_MS); updateStartButton();
   }
@@ -151,6 +227,7 @@ const muchiAudio = document.getElementById('muchiAudio');
     clearInterval(timerId); clearTimeout(spawnTimeout);
     try{ bgmAudio.pause(); }catch(e){}
     document.querySelectorAll('.target').forEach(img=>{ if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid=null; } });
+    pauseOverlay.style.display='flex';
   }
   function resumeGame(){
     if(!running||!paused) return; paused=false; updateStartButton();
@@ -159,6 +236,7 @@ const muchiAudio = document.getElementById('muchiAudio');
     document.querySelectorAll('.target.up').forEach(img=>{
       if(!img._hideTid){ img._hideTid=setTimeout(()=>{ instantHide(img); }, 600); }
     });
+    pauseOverlay.style.display='none';
   }
 
   function runTimer(){
@@ -213,69 +291,157 @@ const muchiAudio = document.getElementById('muchiAudio');
   }
 
   function onHit(e){
-  if(!running || paused) return;
-  const img = e.currentTarget;
-  if(!img.classList.contains('up') || img.classList.contains('hit')) return;
+    if(!running || paused) return;
+    const img = e.currentTarget;
+    if(!img.classList.contains('up') || img.classList.contains('hit')) return;
 
-  img.classList.add('hit');
-  if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid = null; }
-  instantHide(img);
+    img.classList.add('hit');
+    if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid = null; }
+    instantHide(img);
 
-  const hole = img.parentElement;
-  const fl   = hole.querySelector('.float');
+    const hole = img.parentElement;
+    const fl   = hole.querySelector('.float');
 
-  if (img.dataset.kind === 'cc') {
-    // コンボ＋加点（最大10点）
-    setCombo(combo + 1);
-    const add = Math.min(combo, 10);
-    setScore(score + add);
-    // 10コンボ目以降は muchi.mp3（無ければ既存効果音）
-    const sfx = (typeof muchiAudio !== 'undefined' && combo >= 10) ? muchiAudio : smashAudio;
-    playAudio(sfx);
-    // ★ 10コンボ目以降は黄色＆1.4倍
-    const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
-    floatText(fl, `+${add}`, opts);
-  } else {
-    // ミス：コンボ切れ＆-10点、赤＆1.4倍
-    setCombo(0);
-    setScore(score - 10);
-    playAudio(noAudio);
-    floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
+    if (img.dataset.kind === 'cc') {
+      // コンボ＋加点（最大10点）
+      setCombo(combo + 1);
+      const add = Math.min(combo, 10);
+      setScore(score + add);
+      // 10コンボ目以降は muchi.mp3（無ければ既存効果音）
+      const sfx = (typeof muchiAudio !== 'undefined' && combo >= 10) ? muchiAudio : smashAudio;
+      playAudio(sfx);
+      // 10コンボ目以降は黄色＆1.4倍
+      const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
+      floatText(fl, `+${add}`, opts);
+    } else {
+      // ミス：コンボ切れ＆-10点、赤＆1.4倍
+      setCombo(0);
+      setScore(score - 10);
+      playAudio(noAudio);
+      floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
+    }
   }
-}
 
-  function playAudio(a){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(e){} }
-  // 既存の floatText をまるごと差し替え
+  function playAudio(a){ try{ a.currentTime=0; a.muted = muted; a.play().catch(()=>{}); }catch(e){} }
   function floatText(el, text, opts = {}) {
-  const scale = opts.scale || 1;
-  el.textContent = text;
-  el.style.color = opts.color || ''; // ← 指定なければ元の色に戻す
-  el.style.transition = 'none';
-  el.style.opacity = '0';
-  el.style.transform = `translate(-50%, 8px) scale(${0.96 * scale})`;
-  requestAnimationFrame(() => {
-    el.style.transition = 'transform .18s ease, opacity .18s ease';
-    el.style.opacity = '1';
-    el.style.transform = `translate(-50%, -16px) scale(${1 * scale})`;
-    setTimeout(() => { el.style.opacity = '0'; }, 180);
-  });
-}
+    const scale = opts.scale || 1;
+    el.textContent = text;
+    el.style.color = opts.color || '';
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    el.style.transform = `translate(-50%, 8px) scale(${0.96 * scale})`;
+    requestAnimationFrame(() => {
+      el.style.transition = 'transform .18s ease, opacity .18s ease';
+      el.style.opacity = '1';
+      el.style.transform = `translate(-50%, -16px) scale(${1 * scale})`;
+      setTimeout(() => { el.style.opacity = '0'; }, 180);
+    });
+  }
 
+  // ===== ローカルランキング（TOP5） =====
+  const TOP_LIMIT = 5;
+  const KEY_LB   = 'whack_local_lb_v1';
+  const KEY_NAME = 'whack_last_name';
 
+  function getLB(){ try { return JSON.parse(localStorage.getItem(KEY_LB) || '[]'); } catch { return []; } }
+  function saveLB(list){ localStorage.setItem(KEY_LB, JSON.stringify(list)); }
+  function insertScore(name,scoreVal){
+    const entry = { name: (name||'').trim() || '名無しさん', score: Number(scoreVal)||0, ts: new Date().toISOString() };
+    const lb = getLB();
+    lb.push(entry);
+    lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts)); // 高得点優先・同点は古い方を上
+    const cut = lb.slice(0, TOP_LIMIT);
+    saveLB(cut);
+    return cut.findIndex(x => x === entry);
+  }
+  function renderLB(){
+    const lb = getLB();
+    rankingList.innerHTML = '';
+    if(lb.length === 0){ lbEmpty.style.display='block'; return; }
+    lbEmpty.style.display='none';
+    lb.forEach((r,i)=>{
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="lb-rank">${i+1}</span>
+        <span class="lb-name">${esc(r.name)}</span>
+        <span class="lb-score">${Number(r.score).toLocaleString()}</span>
+        <span class="lb-time">${fmtDate(r.ts)}</span>
+      `;
+      rankingList.appendChild(li);
+    });
+  }
+  function isTopLocal(sc){
+    const lb = getLB();
+    if(lb.length < TOP_LIMIT) return sc > 0;
+    return Number(sc) >= Number(lb[lb.length-1]?.score ?? -Infinity);
+  }
+  function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+  function fmtDate(iso){ try{ const d=new Date(iso); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }catch{ return '' } }
+
+  // ===== ゲーム終了 → 結果＆登録導線 =====
   function endGame(){
     running=false; paused=false; updateStartButton(); clearTimeout(spawnTimeout);
     try{ bgmAudio.pause(); }catch(e){}
     document.querySelectorAll('.target').forEach(t=> instantHide(t));
-    try{ congAudio.currentTime=0; congAudio.play().catch(()=>{}); }catch(e){}
+    try{ congAudio.currentTime=0; congAudio.muted = muted; congAudio.play().catch(()=>{}); }catch(e){}
 
-    // 結果発表
-    resultText.textContent = `スコア ${score}点`;
+    const qualifies = isTopLocal(score);
+    const lastName = localStorage.getItem(KEY_NAME) || '';
+
+    // 結果発表（名前登録 or リスタート）
+    if(qualifies){
+      resultText.textContent = `スコア ${score}点`;
+      resultBtns.innerHTML = `
+        <input type="text" id="playerName" maxlength="16" placeholder="名前（未入力で『名無しさん』）"
+               value="${esc(lastName)}"
+               style="font-size:5vw;padding:8px 10px;border-radius:10px;border:none;outline:none;max-width:80vw;"/>
+        <button id="saveNameBtn">登録</button>
+        <button id="restartBtn2" style="background:#34d399;">RESTART</button>
+      `;
+      document.getElementById('saveNameBtn').onclick=()=>{
+        const name = (document.getElementById('playerName').value || '').trim();
+        localStorage.setItem(KEY_NAME, name);
+        insertScore(name, score);
+        hideResult();
+        showRanking();
+      };
+      document.getElementById('restartBtn2').onclick=()=>{ startGame(); hideResult(); };
+    }else{
+      resultText.textContent = `スコア ${score}点`;
+      resultBtns.innerHTML = `<button id="restartBtn">もう一度</button>
+                              <button id="seeLBBtn" style="background:#7b61ff;">ランキング</button>`;
+      document.getElementById('restartBtn').onclick=()=>{ startGame(); hideResult(); };
+      document.getElementById('seeLBBtn').onclick=()=>{ hideResult(); showRanking(); };
+    }
+
     resultOverlay.style.display='flex';
   }
 
+  function hideResult(){ resultOverlay.style.display='none'; }
+  function showRanking(){ renderLB(); rankingOverlay.style.display='flex'; }
+  function hideRanking(){ rankingOverlay.style.display='none'; }
+
   // ===== イベント＆初期化 =====
-  startBtn.addEventListener('click', ()=>{ if(!running) startGame(); else if(!paused) pauseGame(); else resumeGame(); });
-  restartBtn.addEventListener('click', ()=>{ startGame(); });
+  startBtn.addEventListener('click', toggleStartPause);
+  restartBtn.addEventListener('click', ()=>{ startGame(); }); // 初回表示用
+
+  // ミュート
+  muteBtn.addEventListener('click', ()=>{
+    muted = !muted;
+    [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio].forEach(a=> a.muted = muted);
+    muteBtn.textContent = muted ? '🔈' : '🔇';
+  });
+
+  // 一時停止
+  pauseBtn.addEventListener('click', ()=>{ if(!running) return; if(!paused) pauseGame(); });
+  resumeBtn.addEventListener('click', ()=>{ resumeGame(); });
+
+  // ランキング
+  rankingBtn.addEventListener('click', ()=> showRanking());
+  closeRanking.addEventListener('click', ()=> hideRanking());
+  lbRestartBtn.addEventListener('click', ()=>{ hideRanking(); startGame(); });
+
+  // 盤面生成
   buildBoard(); updateStartButton();
 });
 </script>
