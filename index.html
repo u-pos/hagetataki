@@ -9,7 +9,7 @@
       --cols:4; --rows:4;
       --hole:21vw; --gap:2.2vw; --radius:2vw;
 
-      /* 枠線の太さ（見た目のみ。gapには影響しません） */
+      /* 枠線の太さ */
       --glow: clamp(2px, 1.0vw, 6px);   /* 内側グリッド線の太さ */
       --ring: clamp(1px, 0.7vw, 4px);   /* 外枠リングの太さ */
       --glowOffset: calc((var(--gap) - var(--glow)) / 2);
@@ -17,14 +17,7 @@
       /* FEVER帯 */
       --feverH: 8vw;
       --feverGap: 6px;
-      --marquee-speed: 5.5s; /* 文字スクロールの速さ 小さいほど速い */
-
-      /* 手アイコン（“ぺち”アニメ） */
-      --handSize: clamp(28px, 12vw, 88px);
-      --handSwoopX: 28px;   /* 右上から入ってくる時の横オフセット（＋で右） */
-      --handSwoopY: -28px;  /* 右上から入ってくる時の縦オフセット（－で上） */
-      --handPechX: 10px;    /* 叩く瞬間の押し込み（右へ） */
-      --handPechY: 12px;    /* 叩く瞬間の押し込み（下へ） */
+      --marquee-speed: 5.5s;
     }
 
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
@@ -78,6 +71,17 @@
     .target.hit { filter:brightness(.85) grayscale(.2); }
     .float { position:absolute; left:50%; top:30%; transform:translateX(-50%); font-weight:900; font-size:4.6vw; text-shadow:0 2px 6px rgba(0,0,0,.6); opacity:0; pointer-events:none; }
 
+    /* 手の固定表示（窓の右上に出す） */
+    .tap-hand-static{
+      position:absolute;
+      top:4%;
+      right:4%;
+      width: clamp(22px, 9vw, 64px);
+      pointer-events:none;
+      user-select:none;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.4));
+    }
+
     .footer { width:100%; display:flex; justify-content:center; align-items:center; font-size:3.6vw; text-align:center; padding-bottom:2px; }
 
     /* 結果発表（全画面） */
@@ -87,7 +91,7 @@
     .resultBtns { margin-top:12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
     .resultBtns button { font-size:5vw; padding:1.2vw 4vw; border-radius:4vw; background:#2563eb; color:#fff; border:none; font-weight:800; }
 
-    /* 一時停止オーバーレイ（画面全体を覆う）） */
+    /* 一時停止（全画面） */
     .pause-overlay{ position: fixed; inset: 0; width:100vw; height:100dvh; display: none; align-items: center; justify-content: center; background: black; z-index: 1300; flex-direction: column; color: white; border-radius: 0; gap: 16px; padding: 16px; }
     #pauseText{ font-weight:900; font-size:clamp(22px,8vw,56px); letter-spacing:.02em; text-shadow:0 2px 10px rgba(0,0,0,.35); }
     .pause-overlay .start-btn{ font-size:clamp(18px,6vw,28px); padding:12px 28px; border-radius:999px; }
@@ -153,7 +157,7 @@
       display:flex; align-items:center; overflow:hidden;
       pointer-events:none; opacity:0; transition: opacity .12s linear;
       filter: drop-shadow(0 2px 8px rgba(0,0,0,.35));
-      z-index:30; /* リングより前面 */
+      z-index:30;
     }
     .boardWrap.fever .fever-marquee{ opacity:1; }
     .fever-marquee.top   { top:    calc(-1 * (var(--feverH) + var(--feverGap))); }
@@ -185,47 +189,10 @@
       .resultBtns button { font-size:20px; padding:8px 18px; border-radius:14px; }
     }
 
-    /* === iOSダブルタップ拡大対策: CSS側 === */
+    /* iOSダブルタップ拡大対策 */
     * { -webkit-tap-highlight-color: transparent; }
     img, .target, button { -webkit-user-select: none; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; }
     #board, .hole, .target { touch-action: none; }
-
-    /* ===== タップ時の手エフェクト（右上からスッ→ぺち） ===== */
-    .tap-hand-wrap{
-      position: fixed;
-      left: 0; top: 0;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      z-index: 2000;
-    }
-    .tap-hand-img{
-      width: var(--handSize);
-      filter: drop-shadow(0 4px 10px rgba(0,0,0,.6));
-      animation:
-        hand-swoop .16s cubic-bezier(.2,.7,.2,1) 0s forwards,
-        hand-pech  .11s cubic-bezier(.3,.9,.2,1) .16s forwards,
-        hand-fade  .22s linear                 .27s forwards;
-    }
-    @keyframes hand-swoop{
-      from{
-        transform:
-          translate(var(--handSwoopX), var(--handSwoopY))
-          scale(.90) rotate(-18deg);
-        opacity: 0;
-      }
-      to{
-        transform: translate(0,0) scale(1) rotate(-10deg);
-        opacity: 1;
-      }
-    }
-    @keyframes hand-pech{
-      from{ transform: translate(0,0) scale(1) rotate(-10deg); }
-      to  { transform: translate(var(--handPechX), var(--handPechY)) scale(.96) rotate(-10deg); }
-    }
-    @keyframes hand-fade{
-      from{ opacity:1; }
-      to  { opacity:0; }
-    }
   </style>
 </head>
 <body>
@@ -241,7 +208,7 @@
   </header>
 
   <main class="main">
-    <!-- 外枠リング＆FEVER帯用のラッパ -->
+    <!-- 外枠リング＆FEVER帯 -->
     <div class="boardWrap" id="boardWrap">
       <!-- FEVER帯（上） -->
       <div class="fever-marquee top" aria-hidden="true">
@@ -282,8 +249,10 @@
 <audio id="muchiAudio" src="muchi.mp3" preload="auto"></audio>
 <audio id="feverAudio" src="fever.mp3" preload="auto"></audio>
 
-<!-- 手画像のプリロード -->
+<!-- 画像のプリロード（hand.png など） -->
 <img src="hand.png" alt="" aria-hidden="true" style="display:none" />
+<img src="CC2.png" alt="" aria-hidden="true" style="display:none" />
+<img src="NN.png" alt="" aria-hidden="true" style="display:none" />
 
 <!-- 一時停止 -->
 <div id="pauseOverlay" class="pause-overlay">
@@ -331,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('gesturestart', stop);
   window.addEventListener('scroll', ()=> window.scrollTo(0,0));
 
-  /* 要素取得 */
+  /* 要素 */
   const COLS=4, ROWS=4;
   const boardWrap=document.getElementById('boardWrap');
   const boardEl=document.getElementById('board');
@@ -362,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const rankingList = document.getElementById('rankingList');
   const lbEmpty = document.getElementById('lbEmpty');
 
-  const IMG_CC='CC.png';
+  const IMG_CC='CC2.png';  // ← 変更：CC2.png を使用
   const IMG_NN='NN.png';
 
   let score=0, combo=0, timeLeft=60;
@@ -370,15 +339,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let running=false, paused=false;
   let muted=false;
 
-  // NEWラベル用の直近登録TS
+  // NEWラベル用
   let lastNewTs = null;
 
-  /* 固定テンポ（最初から最後まで一定） */
-  const SHOW_MS  = 1050; // 出現している時間
-  const SPAWN_MS = 900;  // 出現間隔
-  const BATCH_MIN = 3;   // 同時出現の最小
-  const BATCH_MAX = 4;   // 同時出現の最大
-  const NN_P     = 0.20; // セノバイト出現率
+  /* 固定テンポ */
+  const SHOW_MS  = 1050;
+  const SPAWN_MS = 900;
+  const BATCH_MIN = 3;
+  const BATCH_MAX = 4;
+  const NN_P     = 0.20;
 
   /* 盤面 */
   function buildBoard(){
@@ -400,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function startGame(){
     running=true; paused=false; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
     hideResult(); hideRanking();
-    boardEl.classList.remove('fever'); boardWrap.classList.remove('fever'); // FEVERオフ
+    boardEl.classList.remove('fever'); boardWrap.classList.remove('fever');
     [smashAudio, noAudio, bgmAudio, congAudio, muchiAudio, feverAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
     [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio,feverAudio].forEach(a=> a.muted = muted);
     try{ bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); }catch(e){}
@@ -433,7 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },1000);
   }
 
-  /* 出現（一定テンポ） */
+  /* 出現 */
   const randInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 
   function scheduleNextSpawn(delay){ clearTimeout(spawnTimeout); spawnTimeout = setTimeout(spawnTick, delay); }
@@ -464,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleNextSpawn(SPAWN_MS);
   }
 
-  // 即退避（次回スポーンの妨げを残さない）
+  // 即退避（手の画像も一緒に消す）
   function instantHide(img){
     img.classList.remove('up');
     img.style.pointerEvents='none';
@@ -473,48 +442,41 @@ document.addEventListener('DOMContentLoaded', () => {
     img.offsetHeight; // reflow
     img.style.transition='';
     img._hideTid=null;
+    // ← ここで同じ穴の手を消す
+    const hand = img.parentElement.querySelector('.tap-hand-static');
+    if(hand) hand.remove();
   }
 
-  /* ==== 手の“右上→ぺち”エフェクト ==== */
-  function showHandAt(x, y){
-    const wrap = document.createElement('div');
-    wrap.className = 'tap-hand-wrap';
-    wrap.style.left = x + 'px';
-    wrap.style.top  = y + 'px';
-
-    const img = document.createElement('img');
-    img.className = 'tap-hand-img';
-    img.src = 'hand.png';
-    img.alt = '';
-
-    wrap.appendChild(img);
-    document.body.appendChild(wrap);
-    setTimeout(()=> wrap.remove(), 650);
-  }
-  function eventXY(e){
-    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    return { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+  /* 手：窓の右上に固定で表示（動かさない） */
+  function showHandInHole(hole){
+    // 既存の手がいれば差し替え
+    const old = hole.querySelector('.tap-hand-static');
+    if(old) old.remove();
+    const hand = document.createElement('img');
+    hand.className = 'tap-hand-static';
+    hand.src = 'hand.png';
+    hand.alt = '';
+    hole.appendChild(hand);
+    return hand;
   }
 
-  /* ヒット処理（加点/減点・FEVER制御・手エフェクト） */
+  /* ヒット処理 */
   function onHit(e){
     if(!running || paused) return;
     const img = e.currentTarget;
     if(!img.classList.contains('up') || img.classList.contains('hit')) return;
 
-    // 手エフェクト（タップ座標に“右上→ぺち”）
-    const {x, y} = eventXY(e);
-    showHandAt(x, y);
+    const hole = img.parentElement;
+    showHandInHole(hole); // ← 窓の右上に手を表示（この後、絵柄と同時に消える）
 
     img.classList.add('hit');
     if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid = null; }
     instantHide(img);
 
-    const hole = img.parentElement;
     const fl   = hole.querySelector('.float');
 
     if (img.dataset.kind === 'cc') {
-      const prevCombo = combo; // 9→10到達検知
+      const prevCombo = combo;
       setCombo(combo + 1);
       const add = Math.min(combo, 10);
       setScore(score + add);
@@ -571,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts));
     const cut = lb.slice(0, TOP_LIMIT);
     saveLB(cut);
-    return entry.ts; // NEW判定に使う
+    return entry.ts;
   }
   function renderLB(){
     const lb = getLB();
@@ -604,11 +566,11 @@ document.addEventListener('DOMContentLoaded', () => {
     banner.className = 'top5-banner';
     banner.textContent = 'TOP5にランクイン！';
     banner.style.cssText = 'text-align:center;margin:6px 0 10px;font-weight:900;color:#ffde59;';
-    content.insertBefore(banner, content.children[1]); // タイトル直下
+    content.insertBefore(banner, content.children[1]);
     setTimeout(()=> banner.remove(), 2500);
   }
 
-  /* 結果 → 自動登録 or 通常結果 */
+  /* 結果 */
   function endGame(){
     running=false; paused=false; updateStartButton(); clearTimeout(spawnTimeout);
     try{ bgmAudio.pause(); }catch(e){}
@@ -633,22 +595,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function hideResult(){ resultOverlay.style.display='none'; }
 
-  /* ボタン類 */
+  /* ボタン */
   document.getElementById('startBtn').addEventListener('click', toggleStartPause);
   restartBtn.addEventListener('click', ()=>{ startGame(); });
 
-  // ミュート
   muteBtn.addEventListener('click', ()=>{
     muted = !muted;
     [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio,feverAudio].forEach(a=> a.muted = muted);
     muteBtn.textContent = muted ? '🔈' : '🔇';
   });
 
-  // 一時停止
   pauseBtn.addEventListener('click', ()=>{ if(!running) return; if(!paused) pauseGame(); });
   resumeBtn.addEventListener('click', ()=>{ resumeGame(); });
 
-  // ランキング
   rankingBtn.addEventListener('click', ()=> showRanking());
   closeRanking.addEventListener('click', ()=> hideRanking());
   lbRestartBtn.addEventListener('click', ()=>{ hideRanking(); startGame(); });
