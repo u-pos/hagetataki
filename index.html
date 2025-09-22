@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>ハゲたたき（オフライン・ローカルTOP5）</title>
+  <title>【ポスゲー】ハゲたたき</title>
   <style>
     :root {
       --cols:4; --rows:4;
@@ -276,7 +276,7 @@
     <div style="display:flex; justify-content:flex-end;">
       <button id="closeRanking" class="icon-btn" style="font-size:2rem;">✖</button>
     </div>
-    <h2>🏆 ローカルランキング TOP5</h2>
+    <h2>🏆自己ランキング TOP5🏆</h2>
     <ol id="rankingList" class="lb-list"></ol>
     <div id="lbEmpty" style="opacity:.7; text-align:center; padding:8px; display:none;">まだ記録がありません</div>
     <div style="display:flex; gap:10px; justify-content:center; margin-top:10px;">
@@ -570,10 +570,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const old = content.querySelector('.top5-banner'); if(old) old.remove();
     const banner = document.createElement('div');
     banner.className = 'top5-banner';
-    banner.textContent = 'TOP5にランクイン！';
+    banner.textContent = 'TOP5にランクインしました！';
     banner.style.cssText = 'text-align:center;margin:6px 0 10px;font-weight:900;color:#ffde59;';
     content.insertBefore(banner, content.children[1]);
-    setTimeout(()=> banner.remove(), 2500);
+    setTimeout(()=> banner.remove(), 3500);
   }
 
   /* 結果 */
