@@ -35,9 +35,20 @@
     button:active { transform:translateY(1px); }
 
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
+/* 盤面ラッパ（外にハミ出すFEVER帯を見せるため明示） */
+.boardWrap { position: relative; display:inline-block; border-radius:10px; overflow: visible; }
 
-    /* 盤面ラッパ（外枠リング＆FEVER帯用） */
-    .boardWrap { position:relative; display:inline-block; border-radius:10px; }
+/* FEVER帯を前面に（虹リングより上に出す） */
+.fever-marquee { 
+  z-index: 30;          /* ← 追加（リングの z-index:10 より大きく） */
+  pointer-events: none; /* 既存のまま */
+}
+
+/* グラデ文字がSafariで見えない対策 */
+.fever-text{
+  -webkit-text-fill-color: transparent; /* ← 追加 */
+  /* 既存の background-clip/text はそのまま */
+}
 
     /* 虹色外枠（リング） */
     .boardWrap.fever::after{
