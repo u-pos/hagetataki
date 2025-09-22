@@ -249,6 +249,7 @@
 <audio id="congAudio" src="cong.mp3" preload="auto"></audio>
 <audio id="muchiAudio" src="muchi.mp3" preload="auto"></audio>
 <audio id="feverAudio" src="fever.mp3" preload="auto"></audio>
+<audio id="itaiAudio" src="itai.mp3" preload="auto"></audio>
 
 <!-- 画像のプリロード -->
 <img src="hand.png" alt="" aria-hidden="true" style="display:none" />
@@ -319,6 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const bgmAudio=document.getElementById('bgmAudio');
   const congAudio=document.getElementById('congAudio');
   const feverAudio=document.getElementById('feverAudio');
+  const itaiAudio = document.getElementById('itaiAudio');
 
   const pauseOverlay=document.getElementById('pauseOverlay');
   const resumeBtn=document.getElementById('resumeBtn');
@@ -332,7 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const rankingList = document.getElementById('rankingList');
   const lbEmpty = document.getElementById('lbEmpty');
 
-  const IMG_CC='CC2.png';  // CC2を使用
+  const IMG_CC='CC3.png';  // CC3を使用
   const IMG_NN='NN.png';
 
   let score=0, combo=0, timeLeft=60;
@@ -490,13 +492,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
       floatText(fl, `+${add}`, opts);
     } else {
-      setCombo(0);
-      setScore(score - 10);
-      playAudio(noAudio);
-      floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
-      boardEl.classList.remove('fever');
-      boardWrap.classList.remove('fever');
-    }
+  setCombo(0);
+  setScore(score - 10);
+  playAudio(itaiAudio); // ← ここを noAudio から itaiAudio に変更
+  floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
+  boardEl.classList.remove('fever');
+  boardWrap.classList.remove('fever');
+}
+
 
     // 一瞬見せてから“同時に”消す
     setTimeout(()=>{
