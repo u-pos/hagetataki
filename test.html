@@ -19,55 +19,20 @@
     button:active { transform:translateY(1px); }
 
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
-    .board {position: relative;
+
+    /* 盤面 */
+    .board {
       width:calc(var(--cols)*var(--hole)+(var(--cols)-1)*var(--gap));
       height:calc(var(--rows)*var(--hole)+(var(--rows)-1)*var(--gap));
-      display:grid; grid-template-columns:repeat(var(--cols),var(--hole)); grid-template-rows:repeat(var(--rows),var(--hole));
+      display:grid;
+      grid-template-columns:repeat(var(--cols),var(--hole));
+      grid-template-rows:repeat(var(--rows),var(--hole));
       gap:var(--gap);
+      border-radius:10px;
+      box-sizing:border-box;
+      position:relative; /* 擬似要素の基準 */
       background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent);
-      border-radius:10px; padding:6px; box-sizing:border-box;
     }
-
-/* 虹色の“枠”だけ描画して高速点滅＋高速色流れ */
-.board.fever::after{
-  content:"";
-  position:absolute;
-  inset:0;
-  border-radius: inherit;
-  padding:4px;                    /* ← 枠の太さ（好みで） */
-  pointer-events:none;
-
-  /* 枠の虹色 */
-  background: linear-gradient(130deg,
-    #f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
-  background-size: 200% 200%;
-
-  /* マスクで“枠”だけを表示（中身は透明） */
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-
-  /* 高速：色流れ + 点滅（お好みで値調整） */
-  animation:
-    rainbowShift 0.6s linear infinite,
-    feverBlink   0.10s steps(2, end) infinite;
-}
-
-/* 色流れ（既存のがあるなら流用可） */
-@keyframes rainbowShift {
-  0%{background-position:0% 50%}
-  50%{background-position:100% 50%}
-  100%{background-position:0% 50%}
-}
-
-/* 点滅：不連続にON/OFF（steps でカチカチ点滅） */
-@keyframes feverBlink{
-  0%   { opacity: .25; }
-  100% { opacity: 1; }
-}
-
     .hole { position:relative; background: radial-gradient(ellipse at center,#15151a 0%,#0f0f12 70%,#07070a 100%); border-radius:calc(var(--radius)+4px); overflow:hidden; }
     .target { position:absolute; inset:auto 0 0 0; margin:auto; width:88%; aspect-ratio:1/1; transform:translateY(110%); transition: transform .2s cubic-bezier(.2,.7,.2,1), filter .1s ease; border-radius:12px; pointer-events:auto; }
     .target.up { transform:translateY(0); }
@@ -97,7 +62,7 @@
     .bottom-buttons {display:flex;justify-content:center;align-items:center;gap:1.5rem;margin-top:0.4rem;}
     .icon-btn {background:none;border:none;font-size:2.8rem;color:white;cursor:pointer;}
 
-    /* ランキング（localStorage／TOP5） */
+    /* ランキング（localStorage／TOP5・日付＆点数のみ） */
     #rankingOverlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.7);
       z-index: 1400; display: none; justify-content: center; align-items: center; padding: 12px;
@@ -113,17 +78,35 @@
       background: rgba(255,255,255,0.06); margin:6px 0; padding:8px 10px; border-radius:10px;
     }
     .lb-rank { width:2.4em; text-align:center; font-weight:900; }
-    .lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } /* ← ここは日付表示に流用 */
     .lb-score { min-width:5em; text-align:right; font-weight:900; }
-    .lb-time  { opacity:.7; font-size:12px; margin-left:8px; }
 
-    /* ===== 盤面だけ虹色FEVERアニメ ===== */
-    @keyframes rainbowShift {
-      0%{background-position:0% 50%}
-      50%{background-position:100% 50%}
-      100%{background-position:0% 50%}
+    /* ===== 盤面の全“線”を虹色高速点滅（外枠＋内側グリッド） ===== */
+    @keyframes rainbowShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    @keyframes feverBlink  { 0%{opacity:.25} 100%{opacity:1} }
+
+    /* 縦の線（gap部分すべて） */
+    .board.fever::before{
+      content:"";
+      position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+      background: linear-gradient(130deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
+      background-size:200% 200%;
+      -webkit-mask: repeating-linear-gradient(to right,
+        #000 0 var(--gap), transparent var(--gap) calc(var(--gap) + var(--hole))
+      );
+      animation: rainbowShift .4s linear infinite, feverBlink .08s steps(2,end) infinite;
     }
-   
+    /* 横の線（gap部分すべて） */
+    .board.fever::after{
+      content:"";
+      position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+      background: linear-gradient(130deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
+      background-size:200% 200%;
+      -webkit-mask: repeating-linear-gradient(to bottom,
+        #000 0 var(--gap), transparent var(--gap) calc(var(--gap) + var(--hole))
+      );
+      animation: rainbowShift .4s linear infinite, feverBlink .08s steps(2,end) infinite;
+    }
 
     @media (min-width: 721px) {
       :root { --hole:120px; --gap:12px; --radius:14px; }
@@ -134,12 +117,13 @@
       .resultScore { font-size:72px; }
       .resultBtns button { font-size:20px; padding:8px 18px; border-radius:14px; }
     }
-    /* どこか共通CSSに追加 */
-* { -webkit-tap-highlight-color: transparent; }
-html, body, .wrap, .board, .hole, .target, button {
-  touch-action: none;   /* Safariのジェスチャを抑止 */
-}
 
+    /* === iOSダブルタップ拡大対策: CSS側 === */
+    * { -webkit-tap-highlight-color: transparent; }
+    img, .target, button {
+      -webkit-user-select: none; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none;
+    }
+    #board, .hole, .target { touch-action: none; }
   </style>
 </head>
 <body>
@@ -191,7 +175,7 @@ html, body, .wrap, .board, .hole, .target, button {
   </div>
 </div>
 
-<!-- ランキング（localStorage／TOP5） -->
+<!-- ランキング（localStorage／TOP5：日付＋点数のみ） -->
 <div id="rankingOverlay">
   <div class="ranking-content">
     <div style="display:flex; justify-content:flex-end;">
@@ -208,23 +192,16 @@ html, body, .wrap, .board, .hole, .target, button {
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  /* === iOSダブルタップ拡大対策(2/2): JS === */
-/* 350ms以内の連続タップを検出して preventDefault() することでズームを抑止 */
-let __lastTouchEnd = 0;
-document.addEventListener('touchend', (e) => {
-  const now = Date.now();
-  if (now - __lastTouchEnd <= 350) {
-    e.preventDefault();        // ← ここが重要：ダブルタップ拡大を止める
-  }
-  __lastTouchEnd = now;
-}, { passive: false });
+  /* === iOSダブルタップ拡大対策: JS側 === */
+  let __lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - __lastTouchEnd <= 350) e.preventDefault();
+    __lastTouchEnd = now;
+  }, { passive: false });
+  document.addEventListener('dblclick', (e) => e.preventDefault(), { passive:false });
 
-/* 念のため：ダブルクリックも無効化 */
-document.addEventListener('dblclick', (e) => {
-  e.preventDefault();
-}, { passive: false });
-
-  // ===== スワイプ/ズーム抑止 =====
+  // ===== スワイプ/ズーム抑止（既存） =====
   const stop = (e)=>{ e.preventDefault(); };
   document.addEventListener('touchmove', stop, {passive:false});
   document.addEventListener('gesturestart', stop);
@@ -427,18 +404,19 @@ document.addEventListener('dblclick', (e) => {
     });
   }
 
-  // ===== ローカルランキング（TOP5） =====
+  // ===== ローカルランキング（TOP5：日付＋点数のみ、自動登録） =====
   const TOP_LIMIT = 5;
-  const KEY_LB   = 'whack_local_lb_v1';
-  const KEY_NAME = 'whack_last_name';
+  const KEY_LB   = 'whack_local_lb_v2'; // v2（名前なし版）
 
   function getLB(){ try { return JSON.parse(localStorage.getItem(KEY_LB) || '[]'); } catch { return []; } }
   function saveLB(list){ localStorage.setItem(KEY_LB, JSON.stringify(list)); }
-  function insertScore(name,scoreVal){
-    const entry = { name: (name||'').trim() || '名無しさん', score: Number(scoreVal)||0, ts: new Date().toISOString() };
+  function insertScoreAuto(scoreVal){
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    const entry = { score: Number(scoreVal)||0, date: dateStr, ts: d.toISOString() };
     const lb = getLB();
     lb.push(entry);
-    lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts)); // 高得点優先・同点は古い方
+    lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts)); // 高得点優先・同点は古い方を上
     const cut = lb.slice(0, TOP_LIMIT);
     saveLB(cut);
     return cut.findIndex(x => x === entry);
@@ -452,9 +430,8 @@ document.addEventListener('dblclick', (e) => {
       const li = document.createElement('li');
       li.innerHTML = `
         <span class="lb-rank">${i+1}</span>
-        <span class="lb-name">${esc(r.name)}</span>
+        <span class="lb-name">${r.date}</span>
         <span class="lb-score">${Number(r.score).toLocaleString()}</span>
-        <span class="lb-time">${fmtDate(r.ts)}</span>
       `;
       rankingList.appendChild(li);
     });
@@ -464,10 +441,26 @@ document.addEventListener('dblclick', (e) => {
     if(lb.length < TOP_LIMIT) return sc > 0;
     return Number(sc) >= Number(lb[lb.length-1]?.score ?? -Infinity);
   }
-  function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
-  function fmtDate(iso){ try{ const d=new Date(iso); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }catch{ return '' } }
 
-  // ===== 結果 → 登録導線 =====
+  // ランキング表示ヘルパ
+  function showRanking(){ renderLB(); rankingOverlay.style.display='flex'; }
+  function hideRanking(){ rankingOverlay.style.display='none'; }
+
+  // TOP5ランクインバナー
+  function showTopBanner(){
+    const content = document.querySelector('#rankingOverlay .ranking-content');
+    // 既存バナー削除
+    const old = content.querySelector('.top5-banner');
+    if(old) old.remove();
+    const banner = document.createElement('div');
+    banner.className = 'top5-banner';
+    banner.textContent = 'TOP5にランクイン！';
+    banner.style.cssText = 'text-align:center;margin:6px 0 10px;font-weight:900;color:#ffde59;';
+    content.insertBefore(banner, content.children[1]); // タイトル直下
+    setTimeout(()=> banner.remove(), 2500);
+  }
+
+  // ===== 結果 → 自動登録 or 通常結果 =====
   function endGame(){
     running=false; paused=false; updateStartButton(); clearTimeout(spawnTimeout);
     try{ bgmAudio.pause(); }catch(e){}
@@ -476,39 +469,22 @@ document.addEventListener('dblclick', (e) => {
     boardEl.classList.remove('fever'); // FEVER解除
 
     const qualifies = isTopLocal(score);
-    const lastName = localStorage.getItem(KEY_NAME) || '';
 
     if(qualifies){
-      resultText.textContent = `スコア ${score}点`;
-      resultBtns.innerHTML = `
-        <input type="text" id="playerName" maxlength="16" placeholder="名前（未入力で『名無しさん』）"
-               value="${esc(lastName)}"
-               style="font-size:5vw;padding:8px 10px;border-radius:10px;border:none;outline:none;max-width:80vw;"/>
-        <button id="saveNameBtn">登録</button>
-        <button id="restartBtn2" style="background:#34d399;">RESTART</button>
-      `;
-      document.getElementById('saveNameBtn').onclick=()=>{
-        const name = (document.getElementById('playerName').value || '').trim();
-        localStorage.setItem(KEY_NAME, name);
-        insertScore(name, score);
-        hideResult();
-        showRanking();
-      };
-      document.getElementById('restartBtn2').onclick=()=>{ startGame(); hideResult(); };
+      insertScoreAuto(score); // ★ 自動登録
+      showRanking();          // ランキングを開く
+      showTopBanner();        // バナー表示
     }else{
       resultText.textContent = `スコア ${score}点`;
       resultBtns.innerHTML = `<button id="restartBtn">もう一度</button>
                               <button id="seeLBBtn" style="background:#7b61ff;">ランキング</button>`;
       document.getElementById('restartBtn').onclick=()=>{ startGame(); hideResult(); };
       document.getElementById('seeLBBtn').onclick=()=>{ hideResult(); showRanking(); };
+      resultOverlay.style.display='flex';
     }
-
-    resultOverlay.style.display='flex';
   }
 
   function hideResult(){ resultOverlay.style.display='none'; }
-  function showRanking(){ renderLB(); rankingOverlay.style.display='flex'; }
-  function hideRanking(){ rankingOverlay.style.display='none'; }
 
   // ===== イベント＆初期化 =====
   startBtn.addEventListener('click', toggleStartPause);
