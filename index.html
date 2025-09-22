@@ -71,7 +71,7 @@
     .target.hit { filter:brightness(.85) grayscale(.2); }
     .float { position:absolute; left:50%; top:30%; transform:translateX(-50%); font-weight:900; font-size:4.6vw; text-shadow:0 2px 6px rgba(0,0,0,.6); opacity:0; pointer-events:none; }
 
-    /* 手の固定表示（窓の右上に出す） */
+    /* 手（窓の右上に固定表示） */
     .tap-hand-static{
       position:absolute;
       top:4%;
@@ -80,6 +80,7 @@
       pointer-events:none;
       user-select:none;
       filter: drop-shadow(0 2px 6px rgba(0,0,0,.4));
+      z-index: 3; /* ← 最前面に */
     }
 
     .footer { width:100%; display:flex; justify-content:center; align-items:center; font-size:3.6vw; text-align:center; padding-bottom:2px; }
@@ -175,7 +176,7 @@
       background: linear-gradient(90deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
       background-size:200% 200%;
       -webkit-background-clip: text; background-clip: text; color: transparent;
-      -webkit-text-fill-color: transparent; /* Safari対策 */
+      -webkit-text-fill-color: transparent;
       animation: rainbowShift .9s linear infinite;
     }
 
@@ -249,9 +250,9 @@
 <audio id="muchiAudio" src="muchi.mp3" preload="auto"></audio>
 <audio id="feverAudio" src="fever.mp3" preload="auto"></audio>
 
-<!-- 画像のプリロード（hand.png など） -->
+<!-- 画像のプリロード -->
 <img src="hand.png" alt="" aria-hidden="true" style="display:none" />
-<img src="CC2.png" alt="" aria-hidden="true" style="display:none" />
+<img src="CC3.png" alt="" aria-hidden="true" style="display:none" />
 <img src="NN.png" alt="" aria-hidden="true" style="display:none" />
 
 <!-- 一時停止 -->
@@ -331,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const rankingList = document.getElementById('rankingList');
   const lbEmpty = document.getElementById('lbEmpty');
 
-  const IMG_CC='CC2.png';  // ← 変更：CC2.png を使用
+  const IMG_CC='CC2.png';  // CC2を使用
   const IMG_NN='NN.png';
 
   let score=0, combo=0, timeLeft=60;
@@ -420,6 +421,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const idx = randInt(0, available.length-1);
       const img = available.splice(idx,1)[0];
 
+      // 新しく出す前に、その穴に残っている手があれば消す（安全）
+      const oldHand = img.parentElement.querySelector('.tap-hand-static');
+      if(oldHand) oldHand.remove();
+
       img.style.removeProperty('transform');
       const isNN=Math.random()<NN_P;
       img.src=isNN?IMG_NN:IMG_CC;
@@ -433,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleNextSpawn(SPAWN_MS);
   }
 
-  // 即退避（手の画像も一緒に消す）
+  // 即退避（※ここでは手は消さない）
   function instantHide(img){
     img.classList.remove('up');
     img.style.pointerEvents='none';
@@ -442,14 +447,17 @@ document.addEventListener('DOMContentLoaded', () => {
     img.offsetHeight; // reflow
     img.style.transition='';
     img._hideTid=null;
-    // ← ここで同じ穴の手を消す
-    const hand = img.parentElement.querySelector('.tap-hand-static');
-    if(hand) hand.remove();
   }
 
-  /* 手：窓の右上に固定で表示（動かさない） */
-  function showHandInHole(hole){
-    // 既存の手がいれば差し替え
+  /* ヒット処理（手を右上に出して、120ms後に絵柄と同時に消す） */
+  function onHit(e){
+    if(!running || paused) return;
+    const img = e.currentTarget;
+    if(!img.classList.contains('up') || img.classList.contains('hit')) return;
+
+    const hole = img.parentElement;
+
+    // 手を表示（既存があれば差し替え）
     const old = hole.querySelector('.tap-hand-static');
     if(old) old.remove();
     const hand = document.createElement('img');
@@ -457,21 +465,10 @@ document.addEventListener('DOMContentLoaded', () => {
     hand.src = 'hand.png';
     hand.alt = '';
     hole.appendChild(hand);
-    return hand;
-  }
 
-  /* ヒット処理 */
-  function onHit(e){
-    if(!running || paused) return;
-    const img = e.currentTarget;
-    if(!img.classList.contains('up') || img.classList.contains('hit')) return;
-
-    const hole = img.parentElement;
-    showHandInHole(hole); // ← 窓の右上に手を表示（この後、絵柄と同時に消える）
-
+    // スコア処理
     img.classList.add('hit');
     if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid = null; }
-    instantHide(img);
 
     const fl   = hole.querySelector('.float');
 
@@ -500,6 +497,12 @@ document.addEventListener('DOMContentLoaded', () => {
       boardEl.classList.remove('fever');
       boardWrap.classList.remove('fever');
     }
+
+    // 一瞬見せてから“同時に”消す
+    setTimeout(()=>{
+      instantHide(img);                    // 絵柄を消す
+      if(hand && hand.isConnected) hand.remove(); // 手も同時に消す
+    }, 120);
   }
 
   function playAudio(a){ try{ a.currentTime=0; a.muted = muted; a.play().catch(()=>{}); }catch(e){} }
