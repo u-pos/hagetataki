@@ -466,7 +466,7 @@ function showHandAt(x, y){
   hand.style.top  = (y - OFFSET_Y) + 'px';
 
   // ちょいランダムに角度を振る（任意）
-  const angle = (Math.random()*30 - 15); // 15度
+  const angle = (Math.random()*10 - 5); // 15度
   hand.style.transform = `translate(-50%,-50%) scale(0.85) rotate(${angle}deg)`;
 
   document.body.appendChild(hand);
