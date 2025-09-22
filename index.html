@@ -451,22 +451,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ==== 手のエフェクト ==== */
-  function showHandAt(x, y){
-    const hand = document.createElement('img');
-    hand.className = 'tap-hand';
-    hand.src = 'hand.png';
-    hand.alt = '';
-    hand.style.left = x + 'px';
-    hand.style.top  = y + 'px';
+ // 今ある showHandAt を丸ごと差し替え
+function showHandAt(x, y){
+  // 右上オフセット（px）：必要なら数値を増減してください
+  const OFFSET_X = 16;  // → 右へ
+  const OFFSET_Y = 20;  // → 上へ
 
-    // ちょいランダムに角度を振って楽しく
-    const angle = (Math.random()*10 - 5); // -5〜+5度
-    hand.style.transform = `translate(-50%,-50%) scale(0.85) rotate(${angle}deg)`;
+  const hand = document.createElement('img');
+  hand.className = 'tap-hand';
+  hand.src = 'hand.png';
+  hand.alt = '';
 
-    document.body.appendChild(hand);
-    // アニメ後に除去
-    setTimeout(()=> { hand.remove(); }, 320);
-  }
+  hand.style.left = (x + OFFSET_X) + 'px';
+  hand.style.top  = (y - OFFSET_Y) + 'px';
+
+  // ちょいランダムに角度を振る（任意）
+  const angle = (Math.random()*30 - 15); // 15度
+  hand.style.transform = `translate(-50%,-50%) scale(0.85) rotate(${angle}deg)`;
+
+  document.body.appendChild(hand);
+  setTimeout(()=> { hand.remove(); }, 320);
+}
   function eventXY(e){
     // pointer / mouse / touch どれでも座標取得
     if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
