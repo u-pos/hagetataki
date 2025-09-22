@@ -12,9 +12,14 @@
       --radius:2vw;
 
       /* ★ 枠線の太さ（表示のみ）。gapには影響しない */
-      --glow: clamp(2px, 1.0vw, 6px);
-      --ring: clamp(1px, 0.7vw, 4px);
+      --glow: clamp(2px, 1.0vw, 6px);  /* 内側グリッド線の太さ */
+      --ring: clamp(1px, 0.7vw, 4px);  /* 外枠リングの太さ */
       --glowOffset: calc((var(--gap) - var(--glow)) / 2);
+
+      /* FEVER帯 */
+      --feverH: 8vw;                /* FEVER帯の高さ */
+      --feverGap: 6px;              /* 盤面との隙間 */
+      --marquee-speed: 5.5s;        /* スクロール速度（小さいほど速い） */
     }
 
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
@@ -31,8 +36,9 @@
 
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
 
-    /* 盤面ラッパ（外枠リング用） */
+    /* 盤面ラッパ（外枠リング＆FEVER帯用） */
     .boardWrap { position:relative; display:inline-block; border-radius:10px; }
+
     /* 虹色外枠（リング） */
     .boardWrap.fever::after{
       content:""; position:absolute; inset:0; border-radius:10px; pointer-events:none;
@@ -108,11 +114,8 @@
       background: linear-gradient(130deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
       background-size:200% 200%;
       -webkit-mask: repeating-linear-gradient(to right,
-        /* 0..hole+offset は透明 */
         transparent 0 calc(var(--hole) + var(--glowOffset)),
-        /* 中央の細線だけ可視（--glow幅） */
         #000       calc(var(--hole) + var(--glowOffset)) calc(var(--hole) + var(--glowOffset) + var(--glow)),
-        /* 残りは透明 .. 周期終端 */
         transparent calc(var(--hole) + var(--glowOffset) + var(--glow)) calc(var(--hole) + var(--gap))
       );
               mask: repeating-linear-gradient(to right,
@@ -144,8 +147,46 @@
       z-index:5;
     }
 
+    /* ===== FEVER帯（上：左スクロール／下：右スクロール） ===== */
+    .fever-marquee{
+      position:absolute; left:-6%; width:112%;
+      height: var(--feverH);
+      display:flex; align-items:center; overflow:hidden;
+      pointer-events:none; opacity:0; transition: opacity .12s linear;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,.35));
+    }
+    .boardWrap.fever .fever-marquee{ opacity:1; }
+
+    .fever-marquee.top   { top:    calc(-1 * (var(--feverH) + var(--feverGap))); }
+    .fever-marquee.bottom{ bottom: calc(-1 * (var(--feverH) + var(--feverGap))); }
+
+    .marquee-track{
+      display:flex; width:max-content; gap:3vw;
+      will-change: transform;
+    }
+    /* 上：左へ流す（0 → -50%） */
+    .fever-marquee.top .marquee-track{
+      animation: marquee-left var(--marquee-speed) linear infinite;
+    }
+    /* 下：右へ流す（-50% → 0） */
+    .fever-marquee.bottom .marquee-track{
+      transform: translateX(-50%);
+      animation: marquee-right var(--marquee-speed) linear infinite;
+    }
+
+    @keyframes marquee-left  { from{ transform: translateX(0);    } to{ transform: translateX(-50%);} }
+    @keyframes marquee-right { from{ transform: translateX(-50%);} to{ transform: translateX(0);    } }
+
+    .marquee-chunk{ white-space: nowrap; font-weight:900; font-size: clamp(16px, 6vw, 40px); letter-spacing:.02em; }
+    .fever-text{
+      background: linear-gradient(90deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
+      background-size:200% 200%;
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      animation: rainbowShift .9s linear infinite;
+    }
+
     @media (min-width: 721px) {
-      :root { --hole:120px; --gap:12px; --radius:14px; --glow: 4px; --ring: 2px; --glowOffset: calc((var(--gap) - var(--glow)) / 2); }
+      :root { --hole:120px; --gap:12px; --radius:14px; --glow: 4px; --ring: 2px; --glowOffset: calc((var(--gap) - var(--glow)) / 2); --feverH: 48px; }
       .badge { font-size:22px; padding:8px 14px; }
       .controls button { font-size:22px; padding:10px 22px; border-radius:24px; }
       .float { font-size:18px; }
@@ -173,9 +214,25 @@
   </header>
 
   <main class="main">
-    <!-- ★ 外枠リング用のラッパを追加 -->
+    <!-- ★ 外枠リング＆FEVER帯用のラッパ -->
     <div class="boardWrap" id="boardWrap">
+      <!-- ★ FEVER帯（上） -->
+      <div class="fever-marquee top" aria-hidden="true">
+        <div class="marquee-track">
+          <div class="marquee-chunk"><span class="fever-text">FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! </span></div>
+          <div class="marquee-chunk"><span class="fever-text">FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! </span></div>
+        </div>
+      </div>
+
       <div class="board" id="board"></div>
+
+      <!-- ★ FEVER帯（下） -->
+      <div class="fever-marquee bottom" aria-hidden="true">
+        <div class="marquee-track">
+          <div class="marquee-chunk"><span class="fever-text">FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! </span></div>
+          <div class="marquee-chunk"><span class="fever-text">FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! </span></div>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -406,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const add = Math.min(combo, 10);
       setScore(score + add);
 
-      // 9→10になった瞬間：fever.mp3 再生＋盤面FEVER ON（外枠も）
+      // 9→10になった瞬間：fever.mp3 再生＋盤面FEVER ON（外枠も、帯も）
       if(prevCombo < 10 && combo >= 10){
         playAudio(feverAudio);
         boardEl.classList.add('fever');
@@ -421,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
       floatText(fl, `+${add}`, opts);
     } else {
-      // ミス：コンボ切れ＆-10点（赤1.4倍）、FEVER解除（外枠も）
+      // ミス：コンボ切れ＆-10点（赤1.4倍）、FEVER解除（外枠・帯もOFF）
       setCombo(0);
       setScore(score - 10);
       playAudio(noAudio);
