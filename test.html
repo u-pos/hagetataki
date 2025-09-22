@@ -78,34 +78,46 @@
       background: rgba(255,255,255,0.06); margin:6px 0; padding:8px 10px; border-radius:10px;
     }
     .lb-rank { width:2.4em; text-align:center; font-weight:900; }
-    .lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } /* ← ここは日付表示に流用 */
-    .lb-score { min-width:5em; text-align:right; font-weight:900; }
+    .lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } /* 日付表示用 */
+    .lb-score { min-width:6em; text-align:right; font-weight:900; display:flex; gap:6px; align-items:center; justify-content:flex-end; }
+    .lb-new { color:#ffde59; font-weight:900; }
 
-    /* ===== 盤面の全“線”を虹色高速点滅（外枠＋内側グリッド） ===== */
+    /* ===== 盤面の全“線”を虹色高速点滅（外枠は任意、内側グリッドは必ず） ===== */
     @keyframes rainbowShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
     @keyframes feverBlink  { 0%{opacity:.25} 100%{opacity:1} }
 
-    /* 縦の線（gap部分すべて） */
+    /* 縦の仕切り線（gap部分すべて）*/
     .board.fever::before{
       content:"";
       position:absolute; inset:0; border-radius:inherit; pointer-events:none;
       background: linear-gradient(130deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
       background-size:200% 200%;
+      /* 最初は“ホール”→その後“ギャップ”を抜き出す（配列の最初はホールなので位相を修正） */
       -webkit-mask: repeating-linear-gradient(to right,
-        #000 0 var(--gap), transparent var(--gap) calc(var(--gap) + var(--hole))
+        transparent 0 var(--hole),
+        #000       var(--hole) calc(var(--hole) + var(--gap))
       );
-      animation: rainbowShift .4s linear infinite, feverBlink .08s steps(2,end) infinite;
+              mask: repeating-linear-gradient(to right,
+        transparent 0 var(--hole),
+        #000       var(--hole) calc(var(--hole) + var(--gap))
+      );
+      animation: rainbowShift .35s linear infinite, feverBlink .06s steps(2,end) infinite;
     }
-    /* 横の線（gap部分すべて） */
+    /* 横の仕切り線（gap部分すべて）*/
     .board.fever::after{
       content:"";
       position:absolute; inset:0; border-radius:inherit; pointer-events:none;
       background: linear-gradient(130deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
       background-size:200% 200%;
       -webkit-mask: repeating-linear-gradient(to bottom,
-        #000 0 var(--gap), transparent var(--gap) calc(var(--gap) + var(--hole))
+        transparent 0 var(--hole),
+        #000       var(--hole) calc(var(--hole) + var(--gap))
       );
-      animation: rainbowShift .4s linear infinite, feverBlink .08s steps(2,end) infinite;
+              mask: repeating-linear-gradient(to bottom,
+        transparent 0 var(--hole),
+        #000       var(--hole) calc(var(--hole) + var(--gap))
+      );
+      animation: rainbowShift .35s linear infinite, feverBlink .06s steps(2,end) infinite;
     }
 
     @media (min-width: 721px) {
@@ -244,6 +256,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let timerId=null, spawnTimeout=null;
   let running=false, paused=false;
   let muted=false;
+
+  // NEWラベル用の直近登録TS
+  let lastNewTs = null;
 
   // ===== 固定テンポ =====
   const SHOW_MS  = 1050; // 出ている時間（一定）
@@ -416,10 +431,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const entry = { score: Number(scoreVal)||0, date: dateStr, ts: d.toISOString() };
     const lb = getLB();
     lb.push(entry);
-    lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts)); // 高得点優先・同点は古い方を上
+    lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts)); // 高得点優先・同点は古い方
     const cut = lb.slice(0, TOP_LIMIT);
     saveLB(cut);
-    return cut.findIndex(x => x === entry);
+    return entry.ts; // 直近登録の識別に使う
   }
   function renderLB(){
     const lb = getLB();
@@ -428,10 +443,11 @@ document.addEventListener('DOMContentLoaded', () => {
     lbEmpty.style.display='none';
     lb.forEach((r,i)=>{
       const li = document.createElement('li');
+      const isNew = (lastNewTs && r.ts === lastNewTs);
       li.innerHTML = `
         <span class="lb-rank">${i+1}</span>
         <span class="lb-name">${r.date}</span>
-        <span class="lb-score">${Number(r.score).toLocaleString()}</span>
+        <span class="lb-score">${isNew?'<span class="lb-new">NEW</span>':''}${Number(r.score).toLocaleString()}</span>
       `;
       rankingList.appendChild(li);
     });
@@ -444,14 +460,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ランキング表示ヘルパ
   function showRanking(){ renderLB(); rankingOverlay.style.display='flex'; }
-  function hideRanking(){ rankingOverlay.style.display='none'; }
+  function hideRanking(){ rankingOverlay.style.display='none'; lastNewTs = null; }
 
   // TOP5ランクインバナー
   function showTopBanner(){
     const content = document.querySelector('#rankingOverlay .ranking-content');
-    // 既存バナー削除
-    const old = content.querySelector('.top5-banner');
-    if(old) old.remove();
+    const old = content.querySelector('.top5-banner'); if(old) old.remove();
     const banner = document.createElement('div');
     banner.className = 'top5-banner';
     banner.textContent = 'TOP5にランクイン！';
@@ -471,9 +485,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const qualifies = isTopLocal(score);
 
     if(qualifies){
-      insertScoreAuto(score); // ★ 自動登録
-      showRanking();          // ランキングを開く
-      showTopBanner();        // バナー表示
+      lastNewTs = insertScoreAuto(score); // ★ 自動登録してTSを保持
+      showRanking();                      // ランキングを開く（NEW表示あり）
+      showTopBanner();                    // バナー表示
     }else{
       resultText.textContent = `スコア ${score}点`;
       resultBtns.innerHTML = `<button id="restartBtn">もう一度</button>
