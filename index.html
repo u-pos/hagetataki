@@ -5,7 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>ハゲたたき</title>
   <style>
-    :root { --cols:4; --rows:4; --hole:21vw; --gap:2.2vw; --radius:2vw; }
+    :root {
+      --cols:4; --rows:4;
+      --hole:21vw; --gap:2.2vw; --radius:2vw;
+
+      /* 枠線の太さ */
+      --glow: clamp(2px, 1.0vw, 6px);   /* 内側グリッド線の太さ */
+      --ring: clamp(1px, 0.7vw, 4px);   /* 外枠リングの太さ */
+      --glowOffset: calc((var(--gap) - var(--glow)) / 2);
+
+      /* FEVER帯 */
+      --feverH: 8vw;
+      --feverGap: 6px;
+      --marquee-speed: 5.5s;
+
+      /* 手アイコン */
+      --handSize: clamp(28px, 12vw, 88px);
+    }
+
     html,body { margin:0; height:100%; background:#0e0e10; color:#fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; }
     .wrap { height:100dvh; width:100vw; display:flex; flex-direction:column; align-items:center; box-sizing:border-box; padding:6px 8px; gap:6px; position:relative; }
 
@@ -19,7 +36,38 @@
     button:active { transform:translateY(1px); }
 
     .main { flex:1; display:flex; justify-content:center; align-items:center; }
-    .board { width:calc(var(--cols)*var(--hole)+(var(--cols)-1)*var(--gap)); height:calc(var(--rows)*var(--hole)+(var(--rows)-1)*var(--gap)); display:grid; grid-template-columns:repeat(var(--cols),var(--hole)); grid-template-rows:repeat(var(--rows),var(--hole)); gap:var(--gap); transition:filter .3s ease; }
+
+    /* 盤面ラッパ（外枠リング＆FEVER帯用） */
+    .boardWrap { position:relative; display:inline-block; border-radius:10px; overflow: visible; }
+
+    /* 虹色外枠（リング） */
+    .boardWrap.fever::after{
+      content:""; position:absolute; inset:0; border-radius:10px; pointer-events:none;
+      padding: var(--ring);
+      background: linear-gradient(130deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
+      background-size:200% 200%;
+      animation: rainbowShift .35s linear infinite, feverBlink .06s steps(2,end) infinite;
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+              mask-composite: exclude;
+      z-index:10;
+    }
+
+    /* 盤面 */
+    .board {
+      width:calc(var(--cols)*var(--hole)+(var(--cols)-1)*var(--gap));
+      height:calc(var(--rows)*var(--hole)+(var(--rows)-1)*var(--gap));
+      display:grid;
+      grid-template-columns:repeat(var(--cols),var(--hole));
+      grid-template-rows:repeat(var(--rows),var(--hole));
+      gap:var(--gap);
+      border-radius:10px;
+      box-sizing:border-box;
+      position:relative;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent);
+    }
+
     .hole { position:relative; background: radial-gradient(ellipse at center,#15151a 0%,#0f0f12 70%,#07070a 100%); border-radius:calc(var(--radius)+4px); overflow:hidden; }
     .target { position:absolute; inset:auto 0 0 0; margin:auto; width:88%; aspect-ratio:1/1; transform:translateY(110%); transition: transform .2s cubic-bezier(.2,.7,.2,1), filter .1s ease; border-radius:12px; pointer-events:auto; }
     .target.up { transform:translateY(0); }
@@ -36,12 +84,7 @@
     .resultBtns button { font-size:5vw; padding:1.2vw 4vw; border-radius:4vw; background:#2563eb; color:#fff; border:none; font-weight:800; }
 
     /* 一時停止オーバーレイ（画面全体を覆う） */
-    .pause-overlay{
-      position: fixed; inset: 0; width:100vw; height:100dvh;
-      display: none; align-items: center; justify-content: center;
-      background: black; z-index: 1300; flex-direction: column; color: white; border-radius: 0;
-      gap: 16px; padding: 16px;
-    }
+    .pause-overlay{ position: fixed; inset: 0; width:100vw; height:100dvh; display: none; align-items: center; justify-content: center; background: black; z-index: 1300; flex-direction: column; color: white; border-radius: 0; gap: 16px; padding: 16px; }
     #pauseText{ font-weight:900; font-size:clamp(22px,8vw,56px); letter-spacing:.02em; text-shadow:0 2px 10px rgba(0,0,0,.35); }
     .pause-overlay .start-btn{ font-size:clamp(18px,6vw,28px); padding:12px 28px; border-radius:999px; }
 
@@ -49,68 +92,115 @@
     .bottom-buttons {display:flex;justify-content:center;align-items:center;gap:1.5rem;margin-top:0.4rem;}
     .icon-btn {background:none;border:none;font-size:2.8rem;color:white;cursor:pointer;}
 
-    /* ランキング（localStorage／TOP5） */
-    #rankingOverlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-      z-index: 1400; display: none; justify-content: center; align-items: center; padding: 12px;
-    }
-    .ranking-content {
-      background: rgba(20,20,24,0.95); color: #fff; padding: 14px; border-radius: 12px;
-      width: 92vw; max-width: 580px; display: flex; flex-direction: column; max-height: 80vh; overflow-y: auto;
-    }
+    /* ランキング（localStorage／TOP5・日付＆点数のみ） */
+    #rankingOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1400; display: none; justify-content: center; align-items: center; padding: 12px; }
+    .ranking-content { background: rgba(20,20,24,0.95); color: #fff; padding: 14px; border-radius: 12px; width: 92vw; max-width: 580px; display: flex; flex-direction: column; max-height: 80vh; overflow-y: auto; }
     .ranking-content h2 { text-align:center; margin: 4px 0 8px; }
     .lb-list { list-style: none; padding: 0; margin: 0; }
-    .lb-list li {
-      display:flex; gap:8px; align-items:center; justify-content:space-between;
-      background: rgba(255,255,255,0.06); margin:6px 0; padding:8px 10px; border-radius:10px;
-    }
+    .lb-list li { display:flex; gap:8px; align-items:center; justify-content:space-between; background: rgba(255,255,255,0.06); margin:6px 0; padding:8px 10px; border-radius:10px; }
     .lb-rank { width:2.4em; text-align:center; font-weight:900; }
     .lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .lb-score { min-width:5em; text-align:right; font-weight:900; }
-    .lb-time  { opacity:.7; font-size:12px; margin-left:8px; }
+    .lb-score { min-width:6.5em; text-align:right; font-weight:900; display:flex; gap:6px; align-items:center; justify-content:flex-end; }
+    .lb-new { color:#ffde59; font-weight:900; }
 
-    /* ===== 10コンボFEVER演出（簡易・虹色発光） ===== */
+    /* ===== 虹色点滅（内側グリッド） ===== */
     @keyframes rainbowShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
-    @keyframes hueSpin { from{ filter:hue-rotate(0deg) saturate(1.3); } to{ filter:hue-rotate(360deg) saturate(1.3); } }
+    @keyframes feverBlink  { 0%{opacity:.25} 100%{opacity:1} }
 
-    /* 既存にあるはずのアニメはそのまま使う */
-@keyframes rainbowShift {
-  0%{background-position:0% 50%}
-  50%{background-position:100% 50%}
-  100%{background-position:0% 50%}
-}
+    .board.fever::before{
+      content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+      background: linear-gradient(130deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
+      background-size:200% 200%;
+      -webkit-mask: repeating-linear-gradient(to right,
+        transparent 0 calc(var(--hole) + var(--glowOffset)),
+        #000       calc(var(--hole) + var(--glowOffset)) calc(var(--hole) + var(--glowOffset) + var(--glow)),
+        transparent calc(var(--hole) + var(--glowOffset) + var(--glow)) calc(var(--hole) + var(--gap))
+      );
+              mask: repeating-linear-gradient(to right,
+        transparent 0 calc(var(--hole) + var(--glowOffset)),
+        #000       calc(var(--hole) + var(--glowOffset)) calc(var(--hole) + var(--glowOffset) + var(--glow)),
+        transparent calc(var(--hole) + var(--glowOffset) + var(--glow)) calc(var(--hole) + var(--gap))
+      );
+      animation: rainbowShift .35s linear infinite, feverBlink .06s steps(2,end) infinite;
+      z-index:5;
+    }
+    .board.fever::after{
+      content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+      background: linear-gradient(130deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
+      background-size:200% 200%;
+      -webkit-mask: repeating-linear-gradient(to bottom,
+        transparent 0 calc(var(--hole) + var(--glowOffset)),
+        #000       calc(var(--hole) + var(--glowOffset)) calc(var(--hole) + var(--glowOffset) + var(--glow)),
+        transparent calc(var(--hole) + var(--glowOffset) + var(--glow)) calc(var(--hole) + var(--gap))
+      );
+              mask: repeating-linear-gradient(to bottom,
+        transparent 0 calc(var(--hole) + var(--glowOffset)),
+        #000       calc(var(--hole) + var(--glowOffset)) calc(var(--hole) + var(--glowOffset) + var(--glow)),
+        transparent calc(var(--hole) + var(--glowOffset) + var(--glow)) calc(var(--hole) + var(--gap))
+      );
+      animation: rainbowShift .35s linear infinite, feverBlink .06s steps(2,end) infinite;
+      z-index:5;
+    }
 
-/* ★ 盤面だけ虹色を流す（グリッドの隙間や外縁に出ます） */
-.board.fever{
-  background: linear-gradient(130deg,
-    rgba(255,0,0,.18), rgba(255,154,0,.18), rgba(208,222,33,.18),
-    rgba(79,220,74,.18), rgba(63,218,216,.18), rgba(47,201,226,.18),
-    rgba(28,127,238,.18), rgba(95,21,242,.18), rgba(186,12,248,.18), rgba(251,7,217,.18)
-  );
-  background-size: 400% 400%;
-  animation: rainbowShift 6s linear infinite;
-  box-shadow: 0 0 22px 6px rgba(255,255,255,.10), inset 0 0 40px rgba(255,255,255,.08);
-}
-.board.fever{
-  background: linear-gradient(130deg,
-    rgba(255,0,0,.18), rgba(255,154,0,.18), rgba(208,222,33,.18),
-    rgba(79,220,74,.18), rgba(63,218,216,.18), rgba(47,201,226,.18),
-    rgba(28,127,238,.18), rgba(95,21,242,.18), rgba(186,12,248,.18), rgba(251,7,217,.18)
-  );
-  background-size: 400% 400%;
-  animation: rainbowShift 6s linear infinite;
-  box-shadow: 0 0 22px 6px rgba(255,255,255,.10), inset 0 0 40px rgba(255,255,255,.08);
-}
-    
+    /* ===== FEVER帯（上：左／下：右スクロール） ===== */
+    .fever-marquee{
+      position:absolute; left:-6%; width:112%;
+      height: var(--feverH);
+      display:flex; align-items:center; overflow:hidden;
+      pointer-events:none; opacity:0; transition: opacity .12s linear;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,.35));
+      z-index:30; /* リングより前面 */
+    }
+    .boardWrap.fever .fever-marquee{ opacity:1; }
+    .fever-marquee.top   { top:    calc(-1 * (var(--feverH) + var(--feverGap))); }
+    .fever-marquee.bottom{ bottom: calc(-1 * (var(--feverH) + var(--feverGap))); }
+
+    .marquee-track{ display:flex; width:max-content; gap:3vw; will-change: transform; }
+    .fever-marquee.top .marquee-track{ animation: marquee-left var(--marquee-speed) linear infinite; }
+    .fever-marquee.bottom .marquee-track{ transform: translateX(-50%); animation: marquee-right var(--marquee-speed) linear infinite; }
+
+    @keyframes marquee-left  { from{ transform: translateX(0);    } to{ transform: translateX(-50%);} }
+    @keyframes marquee-right { from{ transform: translateX(-50%);} to{ transform: translateX(0);    } }
+
+    .marquee-chunk{ white-space: nowrap; font-weight:900; font-size: clamp(16px, 6vw, 40px); letter-spacing:.02em; }
+    .fever-text{
+      background: linear-gradient(90deg,#f00,#ff9a00,#d0de21,#4fdc4a,#3fdad8,#2fc9e2,#1c7fee,#5f15f2,#ba0cf8,#fb07d9,#f00);
+      background-size:200% 200%;
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      -webkit-text-fill-color: transparent; /* Safari対策 */
+      animation: rainbowShift .9s linear infinite;
+    }
 
     @media (min-width: 721px) {
-      :root { --hole:120px; --gap:12px; --radius:14px; }
+      :root { --hole:120px; --gap:12px; --radius:14px; --glow: 4px; --ring: 2px; --glowOffset: calc((var(--gap) - var(--glow)) / 2); --feverH: 48px; }
       .badge { font-size:22px; padding:8px 14px; }
       .controls button { font-size:22px; padding:10px 22px; border-radius:24px; }
       .float { font-size:18px; }
       .footer { font-size:15px; text-aligh:left; }
       .resultScore { font-size:72px; }
       .resultBtns button { font-size:20px; padding:8px 18px; border-radius:14px; }
+    }
+
+    /* === iOSダブルタップ拡大対策: CSS側 === */
+    * { -webkit-tap-highlight-color: transparent; }
+    img, .target, button { -webkit-user-select: none; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; }
+    #board, .hole, .target { touch-action: none; }
+
+    /* ===== タップ時の手エフェクト ===== */
+    .tap-hand{
+      position: fixed; /* 画面基準で正確に表示 */
+      width: var(--handSize); height: var(--handSize);
+      transform: translate(-50%, -50%) scale(0.85) rotate(-10deg);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 2000;
+      filter: drop-shadow(0 4px 10px rgba(0,0,0,.6));
+      animation: hand-pop .28s cubic-bezier(.25,.8,.4,1) forwards;
+    }
+    @keyframes hand-pop{
+      0%  { transform: translate(-50%,-50%) scale(0.85) rotate(-10deg); opacity: 0; }
+      40% { transform: translate(-50%,-50%) scale(1.0)  rotate(-6deg);  opacity: 1; }
+      100%{ transform: translate(-50%,-50%) scale(0.9)  rotate(-10deg); opacity: 0; }
     }
   </style>
 </head>
@@ -127,7 +217,26 @@
   </header>
 
   <main class="main">
-    <div class="board" id="board"></div>
+    <!-- 外枠リング＆FEVER帯用のラッパ -->
+    <div class="boardWrap" id="boardWrap">
+      <!-- FEVER帯（上） -->
+      <div class="fever-marquee top" aria-hidden="true">
+        <div class="marquee-track">
+          <div class="marquee-chunk"><span class="fever-text">FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! </span></div>
+          <div class="marquee-chunk"><span class="fever-text">FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! </span></div>
+        </div>
+      </div>
+
+      <div class="board" id="board"></div>
+
+      <!-- FEVER帯（下） -->
+      <div class="fever-marquee bottom" aria-hidden="true">
+        <div class="marquee-track">
+          <div class="marquee-chunk"><span class="fever-text">FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! </span></div>
+          <div class="marquee-chunk"><span class="fever-text">FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! FEVER!! </span></div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <span style="color:yellow;">【ルール説明】</span>
@@ -147,8 +256,10 @@
 <audio id="bgmAudio" src="BGM.mp3" preload="auto" loop></audio>
 <audio id="congAudio" src="cong.mp3" preload="auto"></audio>
 <audio id="muchiAudio" src="muchi.mp3" preload="auto"></audio>
-<!-- ★ 追加：9→10到達ジングル -->
 <audio id="feverAudio" src="fever.mp3" preload="auto"></audio>
+
+<!-- 手画像のプリロード（表示はJSで） -->
+<img src="hand.png" alt="" aria-hidden="true" style="display:none" />
 
 <!-- 一時停止 -->
 <div id="pauseOverlay" class="pause-overlay">
@@ -164,7 +275,7 @@
   </div>
 </div>
 
-<!-- ランキング（localStorage／TOP5） -->
+<!-- ランキング（localStorage／TOP5：日付＋点数のみ） -->
 <div id="rankingOverlay">
   <div class="ranking-content">
     <div style="display:flex; justify-content:flex-end;">
@@ -181,15 +292,24 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // ===== スワイプ/ズーム抑止 =====
+  /* === iOSダブルタップ拡大対策 === */
+  let __lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - __lastTouchEnd <= 350) e.preventDefault();
+    __lastTouchEnd = now;
+  }, { passive: false });
+  document.addEventListener('dblclick', (e) => e.preventDefault(), { passive:false });
+
+  /* スワイプ/ズーム抑止 */
   const stop = (e)=>{ e.preventDefault(); };
   document.addEventListener('touchmove', stop, {passive:false});
   document.addEventListener('gesturestart', stop);
   window.addEventListener('scroll', ()=> window.scrollTo(0,0));
 
-  // ===== 定数 =====
+  /* 要素取得 */
   const COLS=4, ROWS=4;
-  const wrapEl=document.querySelector('.wrap');
+  const boardWrap=document.getElementById('boardWrap');
   const boardEl=document.getElementById('board');
   const scoreEl=document.getElementById('score');
   const timeEl=document.getElementById('time');
@@ -204,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const noAudio=document.getElementById('noAudio');
   const bgmAudio=document.getElementById('bgmAudio');
   const congAudio=document.getElementById('congAudio');
-  const feverAudio=document.getElementById('feverAudio'); // ★
+  const feverAudio=document.getElementById('feverAudio');
 
   const pauseOverlay=document.getElementById('pauseOverlay');
   const resumeBtn=document.getElementById('resumeBtn');
@@ -218,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const rankingList = document.getElementById('rankingList');
   const lbEmpty = document.getElementById('lbEmpty');
 
-  const IMG_CC='CC.png';
+  const IMG_CC='CC2.png';
   const IMG_NN='NN.png';
 
   let score=0, combo=0, timeLeft=60;
@@ -226,14 +346,17 @@ document.addEventListener('DOMContentLoaded', () => {
   let running=false, paused=false;
   let muted=false;
 
-  // ===== 固定テンポ =====
-  const SHOW_MS  = 1050; // 出ている時間（一定）
-  const SPAWN_MS = 900;  // 出現間隔（一定）
-  const BATCH_MIN = 3;   // 同時出現の最小
-  const BATCH_MAX = 4;   // 同時出現の最大
-  const NN_P     = 0.20; // NN率
+  // NEWラベル用の直近登録TS
+  let lastNewTs = null;
 
-  // ===== 盤面 =====
+  /* 固定テンポ */
+  const SHOW_MS  = 1050;
+  const SPAWN_MS = 900;
+  const BATCH_MIN = 3;
+  const BATCH_MAX = 4;
+  const NN_P     = 0.20;
+
+  /* 盤面生成 */
   function buildBoard(){
     boardEl.innerHTML='';
     for(let i=0;i<COLS*ROWS;i++){
@@ -252,8 +375,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startGame(){
     running=true; paused=false; setScore(0); setCombo(0); timeLeft=60; timeEl.textContent=timeLeft;
-    wrapEl.classList.remove('fever'); // ★ FEVER解除
     hideResult(); hideRanking();
+    boardEl.classList.remove('fever'); boardWrap.classList.remove('fever');
     [smashAudio, noAudio, bgmAudio, congAudio, muchiAudio, feverAudio].forEach(a=>{ try{ a.load(); }catch(e){} });
     [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio,feverAudio].forEach(a=> a.muted = muted);
     try{ bgmAudio.currentTime=0; bgmAudio.play().catch(()=>{}); }catch(e){}
@@ -286,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },1000);
   }
 
-  // ===== 出現（一定ペース・何度でも同じ穴OK） =====
+  /* 出現 */
   const randInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 
   function scheduleNextSpawn(delay){ clearTimeout(spawnTimeout); spawnTimeout = setTimeout(spawnTick, delay); }
@@ -327,10 +450,38 @@ document.addEventListener('DOMContentLoaded', () => {
     img._hideTid=null;
   }
 
+  /* ==== 手のエフェクト ==== */
+  function showHandAt(x, y){
+    const hand = document.createElement('img');
+    hand.className = 'tap-hand';
+    hand.src = 'hand.png';
+    hand.alt = '';
+    hand.style.left = x + 'px';
+    hand.style.top  = y + 'px';
+
+    // ちょいランダムに角度を振って楽しく
+    const angle = (Math.random()*10 - 5); // -5〜+5度
+    hand.style.transform = `translate(-50%,-50%) scale(0.85) rotate(${angle}deg)`;
+
+    document.body.appendChild(hand);
+    // アニメ後に除去
+    setTimeout(()=> { hand.remove(); }, 320);
+  }
+  function eventXY(e){
+    // pointer / mouse / touch どれでも座標取得
+    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    return { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+  }
+
+  /* ヒット処理 */
   function onHit(e){
     if(!running || paused) return;
     const img = e.currentTarget;
     if(!img.classList.contains('up') || img.classList.contains('hit')) return;
+
+    // 手エフェクト（タップ座標）
+    const {x, y} = eventXY(e);
+    showHandAt(x, y);
 
     img.classList.add('hit');
     if(img._hideTid){ clearTimeout(img._hideTid); img._hideTid = null; }
@@ -340,31 +491,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const fl   = hole.querySelector('.float');
 
     if (img.dataset.kind === 'cc') {
-      const prevCombo = combo;        // ★ 到達判定用
+      const prevCombo = combo;
       setCombo(combo + 1);
       const add = Math.min(combo, 10);
       setScore(score + add);
 
-      // 9→10に到達した瞬間にfever再生＋虹色ON
       if(prevCombo < 10 && combo >= 10){
         playAudio(feverAudio);
-        wrapEl.classList.add('fever');
+        boardEl.classList.add('fever');
+        boardWrap.classList.add('fever');
       }
 
-      // 10コンボ目以降は muchi.mp3、未満は smash.mp3
       const sfx = (combo >= 10) ? muchiAudio : smashAudio;
       playAudio(sfx);
 
-      // 10コンボ継続中は黄色＆1.4倍
       const opts = (combo >= 10) ? { color: '#ffd400', scale: 1.4 } : {};
       floatText(fl, `+${add}`, opts);
     } else {
-      // ミス：コンボ切れ＆-10点、赤＆1.4倍、FEVER解除
       setCombo(0);
       setScore(score - 10);
       playAudio(noAudio);
       floatText(fl, `-10`, { color: '#ff3b30', scale: 1.4 });
-      wrapEl.classList.remove('fever'); // ★ FEVER解除
+      boardEl.classList.remove('fever');
+      boardWrap.classList.remove('fever');
     }
   }
 
@@ -384,21 +533,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ===== ローカルランキング（TOP5） =====
+  /* ローカルランキング（TOP5 自動登録） */
   const TOP_LIMIT = 5;
-  const KEY_LB   = 'whack_local_lb_v1';
-  const KEY_NAME = 'whack_last_name';
+  const KEY_LB   = 'whack_local_lb_v2';
 
   function getLB(){ try { return JSON.parse(localStorage.getItem(KEY_LB) || '[]'); } catch { return []; } }
   function saveLB(list){ localStorage.setItem(KEY_LB, JSON.stringify(list)); }
-  function insertScore(name,scoreVal){
-    const entry = { name: (name||'').trim() || '名無しさん', score: Number(scoreVal)||0, ts: new Date().toISOString() };
+  function insertScoreAuto(scoreVal){
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    const entry = { score: Number(scoreVal)||0, date: dateStr, ts: d.toISOString() };
     const lb = getLB();
     lb.push(entry);
     lb.sort((a,b)=> b.score - a.score || new Date(a.ts) - new Date(b.ts));
     const cut = lb.slice(0, TOP_LIMIT);
     saveLB(cut);
-    return cut.findIndex(x => x === entry);
+    return entry.ts;
   }
   function renderLB(){
     const lb = getLB();
@@ -407,11 +557,11 @@ document.addEventListener('DOMContentLoaded', () => {
     lbEmpty.style.display='none';
     lb.forEach((r,i)=>{
       const li = document.createElement('li');
+      const isNew = (lastNewTs && r.ts === lastNewTs);
       li.innerHTML = `
         <span class="lb-rank">${i+1}</span>
-        <span class="lb-name">${esc(r.name)}</span>
-        <span class="lb-score">${Number(r.score).toLocaleString()}</span>
-        <span class="lb-time">${fmtDate(r.ts)}</span>
+        <span class="lb-name">${r.date}</span>
+        <span class="lb-score">${isNew?'<span class="lb-new">NEW</span>':''}${Number(r.score).toLocaleString()}</span>
       `;
       rankingList.appendChild(li);
     });
@@ -421,73 +571,63 @@ document.addEventListener('DOMContentLoaded', () => {
     if(lb.length < TOP_LIMIT) return sc > 0;
     return Number(sc) >= Number(lb[lb.length-1]?.score ?? -Infinity);
   }
-  function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
-  function fmtDate(iso){ try{ const d=new Date(iso); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }catch{ return '' } }
 
-  // ===== ゲーム終了 → 結果＆登録導線 =====
+  function showRanking(){ renderLB(); rankingOverlay.style.display='flex'; }
+  function hideRanking(){ rankingOverlay.style.display='none'; lastNewTs = null; }
+  function showTopBanner(){
+    const content = document.querySelector('#rankingOverlay .ranking-content');
+    const old = content.querySelector('.top5-banner'); if(old) old.remove();
+    const banner = document.createElement('div');
+    banner.className = 'top5-banner';
+    banner.textContent = 'TOP5にランクイン！';
+    banner.style.cssText = 'text-align:center;margin:6px 0 10px;font-weight:900;color:#ffde59;';
+    content.insertBefore(banner, content.children[1]);
+    setTimeout(()=> banner.remove(), 2500);
+  }
+
+  /* 結果 → 自動登録 or 通常結果 */
   function endGame(){
     running=false; paused=false; updateStartButton(); clearTimeout(spawnTimeout);
     try{ bgmAudio.pause(); }catch(e){}
     document.querySelectorAll('.target').forEach(t=> instantHide(t));
     try{ congAudio.currentTime=0; congAudio.muted = muted; congAudio.play().catch(()=>{}); }catch(e){}
-    wrapEl.classList.remove('fever'); // ★ FEVER解除
+    boardEl.classList.remove('fever'); boardWrap.classList.remove('fever');
 
     const qualifies = isTopLocal(score);
-    const lastName = localStorage.getItem(KEY_NAME) || '';
 
     if(qualifies){
-      resultText.textContent = `スコア ${score}点`;
-      resultBtns.innerHTML = `
-        <input type="text" id="playerName" maxlength="16" placeholder="名前（未入力で『名無しさん』）"
-               value="${esc(lastName)}"
-               style="font-size:5vw;padding:8px 10px;border-radius:10px;border:none;outline:none;max-width:80vw;"/>
-        <button id="saveNameBtn">登録</button>
-        <button id="restartBtn2" style="background:#34d399;">RESTART</button>
-      `;
-      document.getElementById('saveNameBtn').onclick=()=>{
-        const name = (document.getElementById('playerName').value || '').trim();
-        localStorage.setItem(KEY_NAME, name);
-        insertScore(name, score);
-        hideResult();
-        showRanking();
-      };
-      document.getElementById('restartBtn2').onclick=()=>{ startGame(); hideResult(); };
+      lastNewTs = insertScoreAuto(score);
+      showRanking();
+      showTopBanner();
     }else{
       resultText.textContent = `スコア ${score}点`;
       resultBtns.innerHTML = `<button id="restartBtn">もう一度</button>
                               <button id="seeLBBtn" style="background:#7b61ff;">ランキング</button>`;
       document.getElementById('restartBtn').onclick=()=>{ startGame(); hideResult(); };
       document.getElementById('seeLBBtn').onclick=()=>{ hideResult(); showRanking(); };
+      resultOverlay.style.display='flex';
     }
-
-    resultOverlay.style.display='flex';
   }
-
   function hideResult(){ resultOverlay.style.display='none'; }
-  function showRanking(){ renderLB(); rankingOverlay.style.display='flex'; }
-  function hideRanking(){ rankingOverlay.style.display='none'; }
 
-  // ===== イベント＆初期化 =====
-  startBtn.addEventListener('click', toggleStartPause);
-  restartBtn.addEventListener('click', ()=>{ startGame(); }); // 初期のダミー
+  /* イベント */
+  document.getElementById('startBtn').addEventListener('click', toggleStartPause);
+  restartBtn.addEventListener('click', ()=>{ startGame(); });
 
-  // ミュート
   muteBtn.addEventListener('click', ()=>{
     muted = !muted;
     [smashAudio,noAudio,bgmAudio,congAudio,muchiAudio,feverAudio].forEach(a=> a.muted = muted);
     muteBtn.textContent = muted ? '🔈' : '🔇';
   });
 
-  // 一時停止
   pauseBtn.addEventListener('click', ()=>{ if(!running) return; if(!paused) pauseGame(); });
   resumeBtn.addEventListener('click', ()=>{ resumeGame(); });
 
-  // ランキング
   rankingBtn.addEventListener('click', ()=> showRanking());
   closeRanking.addEventListener('click', ()=> hideRanking());
   lbRestartBtn.addEventListener('click', ()=>{ hideRanking(); startGame(); });
 
-  // 盤面生成
+  /* 初期化 */
   buildBoard(); updateStartButton();
 });
 </script>
